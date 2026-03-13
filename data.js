@@ -751,30 +751,6 @@ const manufacturers = [
         employees: "1000+"
     },
     {
-        id: 33,
-        name: "Prusa Research",
-        twitter: "",
-        twitterUrl: "",
-        website: "https://www.prusa3d.com",
-        email: "",
-        phone: "",
-        location: {
-            city: "Prague",
-            state: "Czech Republic",
-            zip: ""
-        },
-        industry: "3D Printing",
-        products: [
-            "3D printers",
-            "3D printing filament",
-            "PrusaSlicer software",
-            "Original Prusa i3"
-        ],
-        description: "Open-source 3D printers manufactured in Czech Republic with US presence.",
-        founded: 2012,
-        employees: "250-500"
-    },
-    {
         id: 34,
         name: "AZUL 3D",
         twitter: "",
@@ -959,29 +935,6 @@ const manufacturers = [
         description: "Non-profit supporting fab labs and digital fabrication education worldwide.",
         founded: 2009,
         employees: "10-50"
-    },
-    {
-        id: 42,
-        name: "Nano Dimension",
-        twitter: "",
-        twitterUrl: "",
-        website: "https://www.nano-di.com",
-        email: "",
-        phone: "",
-        location: {
-            city: "Ness Ziona",
-            state: "Israel",
-            zip: ""
-        },
-        industry: "Electronics 3D Printing",
-        products: [
-            "PCB 3D printing",
-            "Additive electronics",
-            "DragonFly system"
-        ],
-        description: "3D printed electronics and PCB manufacturing with US operations.",
-        founded: 2012,
-        employees: "100-250"
     }
     // Add your X.com manufacturer profiles here following this format
 ];
