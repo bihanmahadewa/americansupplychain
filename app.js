@@ -133,9 +133,7 @@ function attachEventListeners() {
     clearFiltersBtn.addEventListener('click', clearFilters);
 
     suggestBtn.addEventListener('click', () => {
-        const email = 'suggestions@americansupplychain.com'; // Change this to your email
-        const subject = 'Suggest a Manufacturer';
-        const body = 'Manufacturer Name:\nX.com Profile:\nWebsite:\nProducts:\nLocation:\n\nAdditional Info:';
-        window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        // Open DM to @bihanmahadewa on X
+        window.open('https://x.com/messages/compose?recipient_id=bihanmahadewa', '_blank');
     });
 }
