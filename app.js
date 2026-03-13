@@ -81,10 +81,10 @@ function createManufacturerCard(manufacturer) {
             </div>
 
             <div class="contact-info">
-                ${manufacturer.website ? `<a href="${manufacturer.website}" target="_blank" rel="noopener" class="contact-link">🌐 Website</a>` : ''}
-                ${manufacturer.twitter ? `<a href="${manufacturer.twitterUrl}" target="_blank" rel="noopener" class="contact-link twitter">𝕏 ${manufacturer.twitter}</a>` : ''}
-                ${manufacturer.email ? `<a href="mailto:${manufacturer.email}" class="contact-link">✉️ Email</a>` : ''}
-                ${manufacturer.phone ? `<a href="tel:${manufacturer.phone}" class="contact-link">📞 ${manufacturer.phone}</a>` : ''}
+                ${manufacturer.website ? `<a href="${manufacturer.website}" target="_blank" rel="noopener" class="contact-link">Website</a>` : ''}
+                ${manufacturer.twitter ? `<a href="${manufacturer.twitterUrl}" target="_blank" rel="noopener" class="contact-link twitter">X ${manufacturer.twitter}</a>` : ''}
+                ${manufacturer.email ? `<a href="mailto:${manufacturer.email}" class="contact-link">Email</a>` : ''}
+                ${manufacturer.phone ? `<a href="tel:${manufacturer.phone}" class="contact-link">${manufacturer.phone}</a>` : ''}
             </div>
 
             ${manufacturer.founded ? `<div class="meta">Founded: ${manufacturer.founded} • Employees: ${manufacturer.employees}</div>` : ''}

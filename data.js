@@ -258,6 +258,730 @@ const manufacturers = [
         description: "Manufacturing for the Oil & Gas Industry, Peptides, EDM services.",
         founded: null,
         employees: "1-50"
+    },
+    // New batch - Digital Manufacturing & 3D Printing Companies
+    {
+        id: 12,
+        name: "Nox Metals",
+        twitter: "@noxmetals",
+        twitterUrl: "https://x.com/noxmetals",
+        website: "",
+        email: "",
+        phone: "",
+        location: {
+            city: "",
+            state: "",
+            zip: ""
+        },
+        industry: "Metal Manufacturing",
+        products: [
+            "Metal parts",
+            "Manufacturing services"
+        ],
+        description: "Metal manufacturing and fabrication. Founded by Zane Hengsperger.",
+        founded: null,
+        employees: ""
+    },
+    {
+        id: 13,
+        name: "Digital Metal",
+        twitter: "@digitalmetalinc",
+        twitterUrl: "https://x.com/digitalmetalinc",
+        website: "",
+        email: "",
+        phone: "",
+        location: {
+            city: "",
+            state: "",
+            zip: ""
+        },
+        industry: "Additive Manufacturing",
+        products: [
+            "Metal 3D printing",
+            "Binder jetting",
+            "Metal parts"
+        ],
+        description: "Digital metal manufacturing. Founded by Connor Kapoor.",
+        founded: null,
+        employees: ""
+    },
+    {
+        id: 14,
+        name: "Foundation Manufacturing",
+        twitter: "@FoundationManf",
+        twitterUrl: "https://x.com/FoundationManf",
+        website: "",
+        email: "",
+        phone: "",
+        location: {
+            city: "",
+            state: "",
+            zip: ""
+        },
+        industry: "Manufacturing",
+        products: [
+            "Manufacturing services",
+            "Custom parts"
+        ],
+        description: "Manufacturing company. Founded by Joe Metzler.",
+        founded: null,
+        employees: ""
+    },
+    {
+        id: 15,
+        name: "Nora Mark",
+        twitter: "@andrewkornuta",
+        twitterUrl: "https://x.com/andrewkornuta",
+        website: "https://www.noramark.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "",
+            state: "",
+            zip: ""
+        },
+        industry: "Manufacturing",
+        products: [
+            "Manufacturing services"
+        ],
+        description: "Manufacturing company founded by Andrew Kornuta.",
+        founded: null,
+        employees: ""
+    },
+    {
+        id: 16,
+        name: "Markforged",
+        twitter: "@Markforged",
+        twitterUrl: "https://x.com/Markforged",
+        website: "https://markforged.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Waltham",
+            state: "Massachusetts",
+            zip: ""
+        },
+        industry: "3D Printing",
+        products: [
+            "Industrial 3D printers",
+            "Carbon fiber printing",
+            "Metal 3D printing",
+            "Composite materials"
+        ],
+        description: "Leading provider of industrial 3D printers for manufacturing strong, functional parts.",
+        founded: 2013,
+        employees: "250-500"
+    },
+    {
+        id: 17,
+        name: "Desktop Metal",
+        twitter: "@DesktopMetal",
+        twitterUrl: "https://x.com/DesktopMetal",
+        website: "https://www.desktopmetal.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Burlington",
+            state: "Massachusetts",
+            zip: ""
+        },
+        industry: "Additive Manufacturing",
+        products: [
+            "Metal 3D printing",
+            "Binder jetting",
+            "Production systems",
+            "Additive manufacturing software"
+        ],
+        description: "Additive manufacturing solutions for metal and composite parts. Founded by Ric Fulop.",
+        founded: 2015,
+        employees: "500-1000"
+    },
+    {
+        id: 18,
+        name: "Carbon",
+        twitter: "@Carbon",
+        twitterUrl: "https://x.com/Carbon",
+        website: "https://www.carbon3d.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Redwood City",
+            state: "California",
+            zip: ""
+        },
+        industry: "3D Printing",
+        products: [
+            "Digital Light Synthesis",
+            "Production 3D printers",
+            "Engineering resins",
+            "Manufacturing software"
+        ],
+        description: "Revolutionary 3D printing technology for production manufacturing. Founded by Joseph DeSimone.",
+        founded: 2013,
+        employees: "250-500"
+    },
+    {
+        id: 19,
+        name: "Divergent 3D",
+        twitter: "@Divergent3D",
+        twitterUrl: "https://x.com/Divergent3D",
+        website: "https://www.divergent3d.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Torrance",
+            state: "California",
+            zip: ""
+        },
+        industry: "Automotive Manufacturing",
+        products: [
+            "Additive manufacturing systems",
+            "Automotive structures",
+            "DAPS technology"
+        ],
+        description: "Revolutionizing automotive manufacturing with additive manufacturing and digital assembly.",
+        founded: 2014,
+        employees: "100-250"
+    },
+    {
+        id: 20,
+        name: "Formlabs",
+        twitter: "@formlabs",
+        twitterUrl: "https://x.com/formlabs",
+        website: "https://formlabs.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Somerville",
+            state: "Massachusetts",
+            zip: ""
+        },
+        industry: "3D Printing",
+        products: [
+            "SLA 3D printers",
+            "SLS 3D printers",
+            "Resins and materials",
+            "3D printing software"
+        ],
+        description: "Professional 3D printing solutions for prototyping and production.",
+        founded: 2011,
+        employees: "500-1000"
+    },
+    {
+        id: 21,
+        name: "VELO3D",
+        twitter: "@VELO3DMetal",
+        twitterUrl: "https://x.com/VELO3DMetal",
+        website: "https://www.velo3d.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Campbell",
+            state: "California",
+            zip: ""
+        },
+        industry: "Metal 3D Printing",
+        products: [
+            "Sapphire metal 3D printers",
+            "Flow software",
+            "Assure quality assurance"
+        ],
+        description: "Advanced metal additive manufacturing for aerospace and high-performance applications.",
+        founded: 2014,
+        employees: "250-500"
+    },
+    {
+        id: 22,
+        name: "3D Systems",
+        twitter: "@3dsystems",
+        twitterUrl: "https://x.com/3dsystems",
+        website: "https://www.3dsystems.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Rock Hill",
+            state: "South Carolina",
+            zip: ""
+        },
+        industry: "3D Printing",
+        products: [
+            "3D printers",
+            "3D printing materials",
+            "3D printing software",
+            "On-demand manufacturing"
+        ],
+        description: "Pioneer in 3D printing with comprehensive additive manufacturing solutions.",
+        founded: 1986,
+        employees: "1000+"
+    },
+    {
+        id: 23,
+        name: "3DEO",
+        twitter: "@3DEOinc",
+        twitterUrl: "https://x.com/3DEOinc",
+        website: "https://www.3deo.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Torrance",
+            state: "California",
+            zip: ""
+        },
+        industry: "Metal 3D Printing",
+        products: [
+            "Metal 3D printing",
+            "Production metal parts",
+            "Intelligent layering"
+        ],
+        description: "High-volume metal 3D printing for production manufacturing.",
+        founded: 2016,
+        employees: "50-100"
+    },
+    {
+        id: 24,
+        name: "Fictiv",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.fictiv.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "San Francisco",
+            state: "California",
+            zip: ""
+        },
+        industry: "Digital Manufacturing",
+        products: [
+            "CNC machining",
+            "3D printing",
+            "Injection molding",
+            "Urethane casting"
+        ],
+        description: "Digital manufacturing platform for custom parts with instant quotes.",
+        founded: 2013,
+        employees: "100-250"
+    },
+    {
+        id: 25,
+        name: "Xometry",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.xometry.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Derwood",
+            state: "Maryland",
+            zip: ""
+        },
+        industry: "Manufacturing Marketplace",
+        products: [
+            "CNC machining",
+            "3D printing",
+            "Sheet metal fabrication",
+            "Injection molding"
+        ],
+        description: "On-demand manufacturing marketplace connecting customers with manufacturing capacity.",
+        founded: 2013,
+        employees: "500-1000"
+    },
+    {
+        id: 26,
+        name: "Protolabs",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.protolabs.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Maple Plain",
+            state: "Minnesota",
+            zip: ""
+        },
+        industry: "Rapid Manufacturing",
+        products: [
+            "CNC machining",
+            "3D printing",
+            "Injection molding",
+            "Sheet metal fabrication"
+        ],
+        description: "Digital manufacturer of custom prototypes and production parts.",
+        founded: 1999,
+        employees: "1000+"
+    },
+    {
+        id: 27,
+        name: "Shapeways",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.shapeways.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "New York",
+            state: "New York",
+            zip: ""
+        },
+        industry: "3D Printing Services",
+        products: [
+            "3D printing",
+            "Multi Jet Fusion",
+            "SLS printing",
+            "Metal printing"
+        ],
+        description: "3D printing service and marketplace for custom products.",
+        founded: 2007,
+        employees: "100-250"
+    },
+    {
+        id: 28,
+        name: "Voodoo Manufacturing",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.voodoomfg.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Brooklyn",
+            state: "New York",
+            zip: ""
+        },
+        industry: "3D Printing",
+        products: [
+            "High-volume 3D printing",
+            "FDM printing",
+            "Production services"
+        ],
+        description: "Automated 3D printing for production manufacturing at scale.",
+        founded: 2015,
+        employees: "50-100"
+    },
+    {
+        id: 29,
+        name: "MakerBot",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.makerbot.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Brooklyn",
+            state: "New York",
+            zip: ""
+        },
+        industry: "3D Printing",
+        products: [
+            "3D printers",
+            "3D printing materials",
+            "MakerBot CloudPrint",
+            "Education solutions"
+        ],
+        description: "Desktop 3D printers for education and professional use.",
+        founded: 2009,
+        employees: "100-250"
+    },
+    {
+        id: 30,
+        name: "Filabot",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.filabot.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Barre",
+            state: "Vermont",
+            zip: ""
+        },
+        industry: "3D Printing Materials",
+        products: [
+            "Filament extruders",
+            "Plastic recycling systems",
+            "3D printing filament"
+        ],
+        description: "Systems for creating and recycling 3D printing filament.",
+        founded: 2012,
+        employees: "10-50"
+    },
+    {
+        id: 31,
+        name: "Atum",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://atum.works",
+        email: "",
+        phone: "",
+        location: {
+            city: "",
+            state: "",
+            zip: ""
+        },
+        industry: "Manufacturing Software",
+        products: [
+            "Manufacturing execution system",
+            "Production management",
+            "Quality control"
+        ],
+        description: "Software for modern manufacturing operations and quality management.",
+        founded: null,
+        employees: "10-50"
+    },
+    {
+        id: 32,
+        name: "Stratasys",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.stratasys.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Eden Prairie",
+            state: "Minnesota",
+            zip: ""
+        },
+        industry: "3D Printing",
+        products: [
+            "FDM 3D printers",
+            "PolyJet 3D printers",
+            "3D printing materials",
+            "Additive manufacturing"
+        ],
+        description: "Global leader in 3D printing and additive manufacturing solutions.",
+        founded: 1989,
+        employees: "1000+"
+    },
+    {
+        id: 33,
+        name: "Prusa Research",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.prusa3d.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Prague",
+            state: "Czech Republic",
+            zip: ""
+        },
+        industry: "3D Printing",
+        products: [
+            "3D printers",
+            "3D printing filament",
+            "PrusaSlicer software",
+            "Original Prusa i3"
+        ],
+        description: "Open-source 3D printers manufactured in Czech Republic with US presence.",
+        founded: 2012,
+        employees: "250-500"
+    },
+    {
+        id: 34,
+        name: "AZUL 3D",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.azul3d.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Evanston",
+            state: "Illinois",
+            zip: ""
+        },
+        industry: "3D Printing",
+        products: [
+            "High-speed 3D printing",
+            "HARP technology",
+            "Large-format printing"
+        ],
+        description: "Revolutionary high-speed 3D printing technology for production manufacturing.",
+        founded: 2019,
+        employees: "10-50"
+    },
+    {
+        id: 35,
+        name: "NextFab",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://nextfab.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Philadelphia",
+            state: "Pennsylvania",
+            zip: ""
+        },
+        industry: "Makerspace",
+        products: [
+            "3D printing",
+            "CNC machining",
+            "Laser cutting",
+            "Maker services"
+        ],
+        description: "Makerspace and manufacturing services for inventors and entrepreneurs.",
+        founded: 2009,
+        employees: "10-50"
+    },
+    {
+        id: 36,
+        name: "Branch Technology",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://branchtechnology.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Chattanooga",
+            state: "Tennessee",
+            zip: ""
+        },
+        industry: "Construction 3D Printing",
+        products: [
+            "Large-scale 3D printing",
+            "Construction automation",
+            "Cellular fabrication"
+        ],
+        description: "Large-scale additive manufacturing for construction and architecture.",
+        founded: 2015,
+        employees: "10-50"
+    },
+    {
+        id: 37,
+        name: "Skydio",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.skydio.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "San Mateo",
+            state: "California",
+            zip: ""
+        },
+        industry: "Drone Manufacturing",
+        products: [
+            "Autonomous drones",
+            "AI-powered navigation",
+            "Utility inspection drones"
+        ],
+        description: "American-made autonomous drones for utilities, construction, and defense.",
+        founded: 2014,
+        employees: "250-500"
+    },
+    {
+        id: 38,
+        name: "Hadrian",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.hadrian.co",
+        email: "",
+        phone: "",
+        location: {
+            city: "Los Angeles",
+            state: "California",
+            zip: ""
+        },
+        industry: "Aerospace Manufacturing",
+        products: [
+            "Automated machining",
+            "Aerospace components",
+            "Rocket parts"
+        ],
+        description: "Automated precision manufacturing for aerospace and defense.",
+        founded: 2021,
+        employees: "50-100"
+    },
+    {
+        id: 39,
+        name: "Prototek",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://prototek.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Portland",
+            state: "Oregon",
+            zip: ""
+        },
+        industry: "Digital Manufacturing",
+        products: [
+            "CNC machining",
+            "Sheet metal fabrication",
+            "3D printing",
+            "Prototyping"
+        ],
+        description: "Digital manufacturing and rapid prototyping services.",
+        founded: 1987,
+        employees: "100-250"
+    },
+    {
+        id: 40,
+        name: "Paperless Parts",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.paperlessparts.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Boston",
+            state: "Massachusetts",
+            zip: ""
+        },
+        industry: "Manufacturing Software",
+        products: [
+            "Quoting software",
+            "Manufacturing ERP",
+            "Shop management"
+        ],
+        description: "Software to help machine shops quote faster and run more efficiently.",
+        founded: 2017,
+        employees: "50-100"
+    },
+    {
+        id: 41,
+        name: "Fab Foundation",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://fabfoundation.org",
+        email: "",
+        phone: "",
+        location: {
+            city: "Cambridge",
+            state: "Massachusetts",
+            zip: ""
+        },
+        industry: "Maker Education",
+        products: [
+            "Fab lab network",
+            "Digital fabrication education",
+            "Community makerspaces"
+        ],
+        description: "Non-profit supporting fab labs and digital fabrication education worldwide.",
+        founded: 2009,
+        employees: "10-50"
+    },
+    {
+        id: 42,
+        name: "Nano Dimension",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.nano-di.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Ness Ziona",
+            state: "Israel",
+            zip: ""
+        },
+        industry: "Electronics 3D Printing",
+        products: [
+            "PCB 3D printing",
+            "Additive electronics",
+            "DragonFly system"
+        ],
+        description: "3D printed electronics and PCB manufacturing with US operations.",
+        founded: 2012,
+        employees: "100-250"
     }
     // Add your X.com manufacturer profiles here following this format
 ];
