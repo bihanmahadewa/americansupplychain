@@ -1,0 +1,23 @@
+{
+  "name": "american-supply-chain-scraper",
+  "version": "1.0.0",
+  "description": "Find American manufacturers on X/Twitter",
+  "main": "scraper.js",
+  "scripts": {
+    "search": "node scraper.js",
+    "analyze": "node analyze-followers.js",
+    "find": "node find-manufacturers.js",
+    "broad": "node broad-search.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "dotenv": "^16.4.5"
+  },
+  "keywords": [
+    "manufacturing",
+    "twitter",
+    "scraper"
+  ],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>American Supply Chain - Made in America Directory</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>🇺🇸 American Supply Chain</h1>
+            <p class="tagline">Discover and connect with American manufacturers</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="search-section">
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="Search by name, product, or location...">
+            </div>
+
+            <div class="filters">
+                <select id="stateFilter">
+                    <option value="">All States</option>
+                </select>
+
+                <select id="industryFilter">
+                    <option value="">All Industries</option>
+                </select>
+
+                <button id="clearFilters">Clear Filters</button>
+            </div>
+
+            <div class="results-info">
+                <span id="resultsCount">0 manufacturers found</span>
+            </div>
+        </section>
+
+        <section class="directory-grid" id="directoryGrid">
+            <!-- Manufacturer cards will be inserted here -->
+        </section>
+
+        <section class="add-manufacturer">
+            <p>Know a manufacturer that should be listed?</p>
+            <button id="suggestBtn">Suggest a Manufacturer</button>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>Supporting American manufacturing and local supply chains</p>
+        </div>
+    </footer>
+
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
