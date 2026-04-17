@@ -43,6 +43,8 @@ a:hover {
 header {
     padding: 24px 0 20px;
     border-bottom: 1px solid var(--ink);
+    background: #111;
+    color: #fff;
 }
 
 header h1 {
@@ -51,6 +53,7 @@ header h1 {
     line-height: 1.2;
     font-weight: 700;
     letter-spacing: -0.01em;
+    margin-bottom: 10px;
 }
 
 .header-logo {
@@ -66,33 +69,31 @@ header h1 {
     filter: grayscale(100%);
 }
 
+.poster-section {
+    margin-top: 32px;
+    text-align: center;
+}
+
+.poster-image-large {
+    max-width: 100%;
+    height: auto;
+    max-height: 400px;
+}
+
 .search-section {
     padding: 20px 0 24px;
-    border-bottom: 1px solid var(--line-strong);
+    border-bottom: 1px solid #e0e0e0;
 }
 
-.search-bar {
-    margin-bottom: 16px;
+.search-section.has-expanded-content {
+    border-bottom: none;
 }
 
-.search-bar input {
-    width: 100%;
-    padding: 12px 14px;
-    border: 1px solid var(--ink);
-    border-radius: 0;
-    background: #fff;
-    color: var(--ink);
-    font: inherit;
-    font-size: 14px;
-}
-
-.search-bar input:focus,
 .filters select:focus,
 .filters button:focus,
 .view-btn:focus,
 #suggestBtn:focus {
-    outline: 2px solid var(--focus);
-    outline-offset: 1px;
+    outline: none;
 }
 
 .filters,
@@ -109,7 +110,7 @@ header h1 {
 #suggestBtn {
     padding: 10px 16px;
     border: 1px solid var(--ink);
-    border-radius: 0;
+    border-radius: 4px;
     background: #fff;
     color: var(--ink);
     font: inherit;
@@ -182,23 +183,95 @@ header h1 {
     gap: 16px 32px;
 }
 
+.section-content-area {
+    margin-top: 24px;
+    padding: 20px;
+    background: #fff;
+    border: 1px solid var(--ink);
+    border-radius: 4px;
+    transition: opacity 0.2s ease;
+}
+
+.section-content-area .manufacturer-list {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.section-content-area .manufacturer-item {
+    display: table-row;
+}
+
+.section-content-area .manufacturer-item:hover {
+    background: var(--panel);
+}
+
+.section-content-area .manufacturer-line {
+    display: table-cell;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    min-width: 350px;
+}
+
+.section-content-area .manufacturer-description {
+    display: block;
+    padding: 4px 0 0 0;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.section-content-area .manufacturer-products {
+    display: table-cell;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+}
+
+.section-content-area .manufacturer-links {
+    display: table-cell;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+}
+
 .subcategory-card {
     min-width: 0;
 }
 
-.subcategory-card summary {
-    list-style: none;
+.subcategory-card.has-data {
+    cursor: pointer;
 }
 
-.subcategory-card summary::-webkit-details-marker {
-    display: none;
+.subcategory-card.has-data .subcategory-summary::before {
+    content: "[+]";
+    width: 26px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--soft);
+}
+
+.subcategory-card.active .subcategory-summary::before {
+    content: "[-]";
+}
+
+.subcategory-card.has-data:hover .subcategory-summary {
+    background: #f5f5f5;
+    border-radius: 4px;
+}
+
+.subcategory-card.active .subcategory-summary {
+    background: #e3f2fd;
+    border-radius: 4px;
 }
 
 .subcategory-summary {
     display: flex;
     align-items: baseline;
     gap: 10px;
-    cursor: pointer;
+}
+
+.subcategory-card.is-empty:hover .subcategory-summary {
+    background: #f5f5f5;
+    border-radius: 4px;
 }
 
 .subcategory-name {
@@ -209,26 +282,6 @@ header h1 {
 .subcategory-badge {
     font-size: 12px;
     color: var(--soft);
-}
-
-.subcategory-card.has-data .subcategory-summary::before,
-.subcategory-card.is-empty .subcategory-summary::before {
-    width: 26px;
-    flex-shrink: 0;
-    font-size: 12px;
-    color: var(--soft);
-}
-
-.subcategory-card.has-data .subcategory-summary::before {
-    content: "[+]";
-}
-
-.subcategory-card.has-data[open] .subcategory-summary::before {
-    content: "[-]";
-}
-
-.subcategory-card.is-empty .subcategory-summary::before {
-    content: "[ ]";
 }
 
 .subcategory-card.is-empty {

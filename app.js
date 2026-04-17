@@ -1,5 +1,4 @@
 // DOM Elements
-const searchInput = document.getElementById('searchInput');
 const stateFilter = document.getElementById('stateFilter');
 const industryFilter = document.getElementById('industryFilter');
 const clearFiltersBtn = document.getElementById('clearFilters');
@@ -905,7 +904,8 @@ function buildBoardData(manufacturersToRender) {
 }
 
 function renderBoardMarkup(boardData, noMatches) {
-    const boardMarkup = boardData.sections.map(renderSectionMarkup).join('');
+    const isFilterActive = stateFilter.value || industryFilter.value;
+    const boardMarkup = boardData.sections.map(section => renderSectionMarkup(section, isFilterActive)).join('');
     const noMatchesMarkup = noMatches
         ? '<div class="no-results">No companies match the current filters. The empty directory stays visible so the gaps remain obvious.</div>'
         : '';
@@ -913,7 +913,17 @@ function renderBoardMarkup(boardData, noMatches) {
     return `${noMatchesMarkup}${boardMarkup}`;
 }
 
-function renderSectionMarkup(section) {
+function renderSectionMarkup(section, isFilterActive) {
+    // When filters are active, only show subcategories with manufacturers
+    const subcategoriesToRender = isFilterActive
+        ? section.subcategories.filter(sub => sub.manufacturers.length > 0)
+        : section.subcategories;
+
+    // If filtering and no subcategories have data, hide the entire section
+    if (isFilterActive && subcategoriesToRender.length === 0) {
+        return '';
+    }
+
     return `
         <section class="section-board">
             <div class="section-board-header">
@@ -921,8 +931,9 @@ function renderSectionMarkup(section) {
                 <span class="section-board-total">${section.count} companies</span>
             </div>
             <div class="subcategory-grid">
-                ${section.subcategories.map(subcategory => renderSubcategoryMarkup(subcategory)).join('')}
+                ${subcategoriesToRender.map(subcategory => renderSubcategoryMarkup(subcategory)).join('')}
             </div>
+            <div class="section-content-area" id="section-content-${escapeHtml(section.name.replace(/\s+/g, '-').toLowerCase())}" style="display: none;"></div>
         </section>
     `;
 }
@@ -940,20 +951,13 @@ function renderSubcategoryMarkup(subcategory) {
         `;
     }
 
-    const isExpanded = expandedSubcategories.has(subcategory.key);
-
     return `
-        <details class="subcategory-card has-data" data-subcategory-key="${escapeHtml(subcategory.key)}" ${isExpanded ? 'open' : ''}>
-            <summary class="subcategory-summary">
+        <div class="subcategory-card has-data" data-subcategory-key="${escapeHtml(subcategory.key)}" data-manufacturers='${JSON.stringify(subcategory.manufacturers)}'>
+            <div class="subcategory-summary">
                 <span class="subcategory-name">${escapeHtml(subcategory.name)}</span>
                 <span class="subcategory-badge">${subcategory.manufacturers.length}</span>
-            </summary>
-            <div class="subcategory-content">
-                <ul class="manufacturer-list">
-                    ${subcategory.manufacturers.map(renderManufacturerMarkup).join('')}
-                </ul>
             </div>
-        </details>
+        </div>
     `;
 }
 
@@ -988,31 +992,50 @@ function renderManufacturerMarkup(manufacturer) {
 }
 
 function updateResultsSummary(boardData, visibleCount) {
-    const emptySubcategories = boardData.totalSubcategories - boardData.populatedSubcategories;
     const hiddenCount = manufacturers.length - visibleCount;
     const summaryParts = [
-        `${visibleCount} of ${manufacturers.length} manufacturers shown`,
-        `${boardData.populatedSubcategories}/${boardData.totalSubcategories} subcategories populated`,
-        `${emptySubcategories} sourcing gaps visible`
+        `${manufacturers.length} manufacturers available`
     ];
 
     if (hiddenCount > 0) {
-        summaryParts.push(`${hiddenCount} filtered out`);
+        summaryParts.push(`${visibleCount} shown`);
     }
 
     resultsCount.textContent = summaryParts.join('  |  ');
 }
 
 function attachBoardEventListeners() {
-    directoryGrid.querySelectorAll('details.has-data').forEach(detail => {
-        detail.addEventListener('toggle', () => {
-            const key = detail.getAttribute('data-subcategory-key');
+    directoryGrid.querySelectorAll('.subcategory-card.has-data').forEach(card => {
+        card.addEventListener('click', () => {
+            const section = card.closest('.section-board');
+            const contentArea = section.querySelector('.section-content-area');
+            const manufacturers = JSON.parse(card.getAttribute('data-manufacturers'));
+            const searchSection = document.querySelector('.search-section');
 
-            if (detail.open) {
-                expandedSubcategories.add(key);
-            } else {
-                expandedSubcategories.delete(key);
+            // If clicking the same card that's already active, close it
+            if (card.classList.contains('active')) {
+                card.classList.remove('active');
+                contentArea.style.display = 'none';
+                searchSection.classList.remove('has-expanded-content');
+                return;
             }
+
+            // Remove active class from all cards in this section
+            section.querySelectorAll('.subcategory-card').forEach(c => {
+                c.classList.remove('active');
+            });
+
+            // Add active class to clicked card
+            card.classList.add('active');
+
+            // Populate content area
+            contentArea.innerHTML = `
+                <ul class="manufacturer-list">
+                    ${manufacturers.map(renderManufacturerMarkup).join('')}
+                </ul>
+            `;
+            contentArea.style.display = 'block';
+            searchSection.classList.add('has-expanded-content');
         });
     });
 }
@@ -1039,31 +1062,25 @@ function escapeAttribute(value) {
 }
 
 function filterManufacturers() {
-    const searchTerm = searchInput.value.trim().toLowerCase();
     const selectedState = stateFilter.value;
     const selectedIndustry = industryFilter.value;
 
     filteredManufacturers = manufacturers.filter(manufacturer => {
-        const assignment = manufacturerAssignments.get(manufacturer.id);
-        const location = formatLocation(manufacturer.location);
-        const searchableFields = [
-            manufacturer.name,
-            manufacturer.description,
-            manufacturer.industry,
-            manufacturer.products.join(' '),
-            location,
-            assignment ? assignment.section : '',
-            assignment ? assignment.subcategory : ''
-        ].join(' ').toLowerCase();
-
-        const matchesSearch = searchTerm === '' || searchableFields.includes(searchTerm);
         const matchesState = selectedState === '' || manufacturer.location.state === selectedState;
         const matchesIndustry = selectedIndustry === '' || manufacturer.industry === selectedIndustry;
 
-        return matchesSearch && matchesState && matchesIndustry;
+        return matchesState && matchesIndustry;
     });
 
     renderManufacturers(filteredManufacturers);
+
+    // Auto-expand first subcategory when industry filter is selected
+    if (selectedIndustry && selectedIndustry !== '') {
+        const firstSubcategory = directoryGrid.querySelector('.subcategory-card.has-data');
+        if (firstSubcategory) {
+            firstSubcategory.click();
+        }
+    }
 
     if (currentView === 'graph') {
         renderGraph(filteredManufacturers);
@@ -1071,14 +1088,12 @@ function filterManufacturers() {
 }
 
 function clearFilters() {
-    searchInput.value = '';
     stateFilter.value = '';
     industryFilter.value = '';
     filterManufacturers();
 }
 
 function attachEventListeners() {
-    searchInput.addEventListener('input', filterManufacturers);
     stateFilter.addEventListener('change', filterManufacturers);
     industryFilter.addEventListener('change', filterManufacturers);
     clearFiltersBtn.addEventListener('click', clearFilters);
