@@ -303,6 +303,10 @@ span.manufacturer-name {
     background: #fff;
 }
 
+#networkGraph .leaflet-container {
+    font-family: Arial, Helvetica, sans-serif;
+}
+
 .unmapped-board {
     margin-top: 14px;
     padding-top: 14px;
