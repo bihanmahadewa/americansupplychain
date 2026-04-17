@@ -853,12 +853,11 @@ function buildBoardData(manufacturersToRender) {
 
 function renderBoardMarkup(boardData, noMatches) {
     const boardMarkup = boardData.sections.map(renderSectionMarkup).join('');
-    const unmappedMarkup = renderUnmappedMarkup(boardData.unmappedManufacturers);
     const noMatchesMarkup = noMatches
         ? '<div class="no-results">No companies match the current filters. The empty directory stays visible so the gaps remain obvious.</div>'
         : '';
 
-    return `${noMatchesMarkup}${boardMarkup}${unmappedMarkup}`;
+    return `${noMatchesMarkup}${boardMarkup}`;
 }
 
 function renderSectionMarkup(section) {
@@ -935,25 +934,6 @@ function renderManufacturerMarkup(manufacturer) {
     `;
 }
 
-function renderUnmappedMarkup(unmappedManufacturers) {
-    if (unmappedManufacturers.length === 0) {
-        return '';
-    }
-
-    return `
-        <section class="unmapped-board">
-            <div class="unmapped-header">
-                <h2>Unmapped Leads</h2>
-                <p>These companies are in the directory but do not cleanly land in the current category map yet.</p>
-                <span class="section-board-total">${unmappedManufacturers.length} needs classification</span>
-            </div>
-            <ul class="manufacturer-list">
-                ${unmappedManufacturers.map(renderManufacturerMarkup).join('')}
-            </ul>
-        </section>
-    `;
-}
-
 function updateResultsSummary(boardData, visibleCount) {
     const emptySubcategories = boardData.totalSubcategories - boardData.populatedSubcategories;
     const hiddenCount = manufacturers.length - visibleCount;
@@ -965,10 +945,6 @@ function updateResultsSummary(boardData, visibleCount) {
 
     if (hiddenCount > 0) {
         summaryParts.push(`${hiddenCount} filtered out`);
-    }
-
-    if (boardData.unmappedManufacturers.length > 0) {
-        summaryParts.push(`${boardData.unmappedManufacturers.length} unmapped leads`);
     }
 
     resultsCount.textContent = summaryParts.join('  |  ');
@@ -1058,7 +1034,7 @@ function attachEventListeners() {
     graphViewBtn.addEventListener('click', () => switchView('graph'));
 
     suggestBtn.addEventListener('click', () => {
-        window.open('https://x.com/messages/compose?recipient_id=bihanmahadewa', '_blank');
+        window.open('https://github.com/bihanmahadewa/americansupplychain', '_blank');
     });
 }
 
