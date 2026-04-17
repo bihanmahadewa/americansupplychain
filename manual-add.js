@@ -65,38 +65,10 @@ async function addManufacturer() {
 }
 
 function saveAndExit() {
-    // Save to JSON
-    fs.writeFileSync('manual-manufacturers.json', JSON.stringify(manufacturers, null, 2));
-    console.log('\n✓ Saved to manual-manufacturers.json');
-
-    // Generate data.js format
-    let output = '// Manually added manufacturers\n';
-    output += '// Copy these into data.js\n\n';
-    manufacturers.forEach(m => {
-        output += `  {\n`;
-        output += `    id: ${m.id},\n`;
-        output += `    name: "${m.name}",\n`;
-        output += `    twitter: "${m.twitter}",\n`;
-        output += `    twitterUrl: "${m.twitterUrl}",\n`;
-        output += `    website: "${m.website}",\n`;
-        output += `    email: "${m.email}",\n`;
-        output += `    phone: "${m.phone}",\n`;
-        output += `    location: {\n`;
-        output += `      city: "${m.location.city}",\n`;
-        output += `      state: "${m.location.state}",\n`;
-        output += `      zip: ""\n`;
-        output += `    },\n`;
-        output += `    industry: "${m.industry}",\n`;
-        output += `    products: ${JSON.stringify(m.products)},\n`;
-        output += `    description: "${m.description}",\n`;
-        output += `    founded: ${m.founded},\n`;
-        output += `    employees: "${m.employees}"\n`;
-        output += `  },\n\n`;
-    });
-
-    fs.writeFileSync('manual-manufacturers-export.js', output);
-    console.log('✓ Saved to manual-manufacturers-export.js');
-    console.log('\nCopy the contents of manual-manufacturers-export.js into data.js');
+    const existingData = JSON.parse(fs.readFileSync('data.json', 'utf-8'));
+    const newData = existingData.concat(manufacturers);
+    fs.writeFileSync('data.json', JSON.stringify(newData, null, 2));
+    console.log('\n✓ Saved to data.json');
 
     rl.close();
     process.exit(0);

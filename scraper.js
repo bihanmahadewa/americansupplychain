@@ -326,42 +326,15 @@ class ManufacturerScraper {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    saveResults(filename = 'manufacturers-found.json') {
-        fs.writeFileSync(filename, JSON.stringify(this.manufacturers, null, 2));
+    saveResults(filename = 'data.json') {
+        const existingData = JSON.parse(fs.readFileSync(filename, 'utf-8'));
+        const newData = existingData.concat(this.manufacturers);
+        fs.writeFileSync(filename, JSON.stringify(newData, null, 2));
         console.log(`Results saved to ${filename}`);
     }
 
-    exportToDataJS(filename = 'manufacturers-export.js') {
-        let output = '// Auto-generated manufacturer data\nconst newManufacturers = [\n';
-
-        this.manufacturers.forEach((m, index) => {
-            output += `  {\n`;
-            output += `    id: ${index + 100}, // Adjust ID as needed\n`;
-            output += `    name: "${m.name}",\n`;
-            output += `    twitter: "${m.twitter}",\n`;
-            output += `    twitterUrl: "${m.twitterUrl}",\n`;
-            output += `    website: "${m.website}",\n`;
-            output += `    email: "", // Add manually\n`;
-            output += `    phone: "", // Add manually\n`;
-            output += `    location: {\n`;
-            output += `      city: "", // Parse from: ${m.location}\n`;
-            output += `      state: "", // Parse from: ${m.location}\n`;
-            output += `      zip: ""\n`;
-            output += `    },\n`;
-            output += `    industry: "", // Categorize manually\n`;
-            output += `    products: ${JSON.stringify(m.products)},\n`;
-            output += `    description: "${m.description.replace(/"/g, '\\"')}",\n`;
-            output += `    founded: null, // Add if known\n`;
-            output += `    employees: "" // Add if known\n`;
-            output += `  }${index < this.manufacturers.length - 1 ? ',' : ''}\n`;
-        });
-
-        output += '];\n\n';
-        output += '// Copy these entries into data.js\n';
-        output += 'module.exports = newManufacturers;\n';
-
-        fs.writeFileSync(filename, output);
-        console.log(`Data.js export saved to ${filename}`);
+    exportToDataJS(filename = 'data.json') {
+        this.saveResults(filename);
     }
 }
 
