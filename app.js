@@ -1099,9 +1099,6 @@ function renderGraph(manufacturersToGraph) {
 
         const assignment = manufacturerAssignments.get(manufacturer.id);
         const location = formatLocation(manufacturer.location);
-        const classification = assignment
-            ? `${assignment.section} / ${assignment.subcategory}`
-            : 'Unmapped lead';
         const markerColor = getIndustryColor(manufacturer.industry);
 
         const marker = L.circleMarker(coordinates, {
@@ -1115,8 +1112,7 @@ function renderGraph(manufacturersToGraph) {
         marker.bindPopup(`
             <strong>${escapeHtml(manufacturer.name)}</strong><br>
             ${escapeHtml(location || 'Location unavailable')}<br>
-            ${escapeHtml(manufacturer.industry || 'Unknown industry')}<br>
-            ${escapeHtml(classification)}
+            ${escapeHtml(manufacturer.industry || 'Unknown industry')}
         `);
 
         markerLayer.addLayer(marker);
