@@ -31,67 +31,98 @@
     >
 </head>
 <body>
-    <header>
-        <div class="container">
-            <div class="header-logo">
-                <img src="flag.png" alt="American flag" class="flag-icon">
-                <h1>American Supply Chain</h1>
+    <div class="page-shell">
+        <header>
+            <div class="container">
+                <div class="header-logo">
+                    <img src="flag.png" alt="American flag" class="flag-icon">
+                    <h1>American Supply Chain</h1>
+                </div>
             </div>
-        </div>
-    </header>
+        </header>
 
-    <main class="container">
-        <section class="search-section">
-            <div class="filters">
-                <select id="stateFilter">
-                    <option value="">All States</option>
-                </select>
+        <main class="container">
+            <section class="search-section">
+                <div class="filters">
+                    <select id="stateFilter">
+                        <option value="">All States</option>
+                    </select>
 
-                <select id="industryFilter">
-                    <option value="">All Sectors</option>
-                </select>
+                    <select id="industryFilter">
+                        <option value="">All Sectors</option>
+                    </select>
 
-                <button id="clearFilters">Clear</button>
-            </div>
+                    <button id="clearFilters">Clear</button>
+                </div>
 
-            <div class="view-controls">
-                <button id="treeViewBtn" class="view-btn active">List</button>
-                <button id="graphViewBtn" class="view-btn">Map</button>
-            </div>
+                <div class="view-controls">
+                    <button id="treeViewBtn" class="view-btn active">List</button>
+                    <button id="graphViewBtn" class="view-btn">Map</button>
+                </div>
 
-            <div class="results-info">
-                <span id="resultsCount">0 manufacturers indexed</span>
-            </div>
-        </section>
+                <div class="results-info">
+                    <span id="resultsCount">0 manufacturers indexed</span>
+                </div>
+            </section>
 
-        <section class="directory-grid" id="directoryGrid">
-            <!-- Category directory will be inserted here -->
-        </section>
+            <section class="directory-grid" id="directoryGrid">
+                <!-- Category directory will be inserted here -->
+            </section>
 
-        <section class="graph-container" id="graphContainer" style="display: none;">
-            <div id="networkGraph"></div>
-        </section>
+            <section class="graph-container" id="graphContainer" style="display: none;">
+                <div id="networkGraph"></div>
+                <div class="map-legend" id="mapLegend"></div>
+            </section>
 
-        <section class="add-manufacturer">
-            <p>Know a company that belongs in one of the missing categories? This project is open source.</p>
-            <button id="suggestBtn">Contribute</button>
-        </section>
+            <section class="add-manufacturer">
+                <p>Know a company that belongs in one of the missing categories? This project is open source.</p>
+                <button id="suggestBtn">Contribute</button>
+            </section>
 
-        <!-- <section class="poster-section">
+            <!-- <section class="poster-section">
             <a href="https://reindustrialize.com" target="_blank" rel="noopener">
                 <img src="reindustrialize.png" alt="Reindustrialize Summit" class="poster-image-large">
             </a>
         </section> -->
-    </main>
+        </main>
 
-    <footer>
-        <div class="container">
-            <p>
-                American Supply Chain 2026 by
-                <a href="https://x.com/bihanmahadewa" target="_blank" rel="noopener">Bihan Mahadewa</a>
-            </p>
+        <footer>
+            <div class="container">
+                <p>
+                    American Supply Chain 2026 by
+                    <a href="https://x.com/bihanmahadewa" target="_blank" rel="noopener">Bihan Mahadewa</a>
+                </p>
+            </div>
+        </footer>
+    </div>
+
+    <aside class="assistant-panel" id="assistantPanel">
+        <div class="assistant-panel-body is-landing" id="assistantPanelBody">
+            <div class="assistant-messages" id="chatMessages">
+            </div>
+            <div class="assistant-quick-links" id="assistantQuickLinks">
+                <button class="assistant-quick-link is-primary" id="funFactTrigger" type="button">Show a fun fact</button>
+                <button class="assistant-quick-link" type="button" data-prompt="I need help finding U.S. manufacturers for a hardware product.">Find manufacturers</button>
+                <button class="assistant-quick-link" type="button" data-prompt="What supply chain gaps or bottlenecks stand out in this directory?">Show sourcing gaps</button>
+                <button class="assistant-quick-link" type="button" data-prompt="Which categories should a hardware founder look at first when sourcing in America?">Explore categories</button>
+                <button class="assistant-quick-link" type="button" data-prompt="Help me source CNC machining, injection molding, or electronics assembly in the U.S.">Popular capabilities</button>
+                <button class="assistant-quick-link" type="button" data-prompt="What are 10 notable manufacturing startups or emerging industrial companies in the U.S.?">Top 10 manufacturing startups</button>
+            </div>
+            <div class="fun-fact-card" id="funFactCard" hidden>
+                <p class="fun-fact-kicker">American manufacturing heritage</p>
+                <p class="fun-fact-text" id="funFactText"></p>
+            </div>
+            <div class="assistant-results" id="assistantResults"></div>
         </div>
-    </footer>
+
+        <div class="assistant-input">
+            <textarea id="chatInput" placeholder="Ask for manufacturers or describe what you're looking for." rows="4"></textarea>
+            <div class="assistant-actions">
+                <p class="assistant-hint">Press Enter to send. Shift+Enter for a new line.</p>
+                <button id="chatSend">Send</button>
+            </div>
+        </div>
+    </aside>
 
     <script src="data.js?v=20260417-2"></script>
     <script

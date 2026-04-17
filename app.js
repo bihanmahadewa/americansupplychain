@@ -9,6 +9,15 @@ const resultsCount = document.getElementById('resultsCount');
 const suggestBtn = document.getElementById('suggestBtn');
 const treeViewBtn = document.getElementById('treeViewBtn');
 const graphViewBtn = document.getElementById('graphViewBtn');
+const chatInput = document.getElementById('chatInput');
+const chatSend = document.getElementById('chatSend');
+const chatMessages = document.getElementById('chatMessages');
+const assistantResults = document.getElementById('assistantResults');
+const assistantPanelBody = document.getElementById('assistantPanelBody');
+const assistantQuickLinks = document.getElementById('assistantQuickLinks');
+const funFactTrigger = document.getElementById('funFactTrigger');
+const funFactCard = document.getElementById('funFactCard');
+const funFactText = document.getElementById('funFactText');
 
 const tierTaxonomy = [
     {
@@ -284,11 +293,11 @@ const tierTaxonomy = [
                             'large-scale 3d printing'
                         ]
                     },
-                    {
-                        name: 'Powder metallurgy',
-                        industryMatches: [],
-                        keywordMatches: ['powder metallurgy', 'binder jetting', 'metal 3d printing']
-                    }
+                    // {
+                    //     name: 'Powder metallurgy',
+                    //     industryMatches: [],
+                    //     keywordMatches: ['powder metallurgy', 'binder jetting', 'metal 3d printing']
+                    // }
                 ]
             },
             {
@@ -558,6 +567,19 @@ let filteredManufacturers = [...manufacturers];
 let currentView = 'tree';
 let usMap = null;
 let markerLayer = null;
+let activeMapCategory = null;
+let assistantPreviousResponseId = null;
+let assistantRequestInFlight = false;
+let hasStartedAssistantConversation = false;
+let currentFunFactIndex = -1;
+
+const manufacturingFunFacts = [
+    'The Springfield Armory helped pioneer interchangeable parts manufacturing in the United States during the 19th century.',
+    'Rosie the Riveter became a symbol of the wartime factory workforce that reshaped American industrial production.',
+    'Detroit once produced so many vehicles that the city became one of the strongest symbols of large-scale industrial capacity in the world.',
+    'American machine tool builders were a backbone of 20th century manufacturing because they enabled other factories to make precise parts at scale.',
+    'The U.S. aerospace supply chain helped push advances in aluminum, composites, controls, and precision machining across the broader industrial base.'
+];
 
 const defaultUSView = {
     center: [39.5, -98.35],
@@ -690,22 +712,19 @@ const cityCoordinates = {
     "zeeland|michigan": [42.8125, -86.0186]
 };
 
-const markerPalette = [
-    '#1f77b4',
-    '#ff7f0e',
-    '#2ca02c',
-    '#d62728',
-    '#9467bd',
-    '#8c564b',
-    '#e377c2',
-    '#7f7f7f',
-    '#bcbd22',
-    '#17becf',
-    '#393b79',
-    '#637939',
-    '#8c6d31',
-    '#843c39',
-    '#7b4173'
+const categoryColorPalette = [
+    '#0072B2',
+    '#E69F00',
+    '#009E73',
+    '#D55E00',
+    '#CC79A7',
+    '#56B4E9',
+    '#F0E442',
+    '#000000',
+    '#C44E52',
+    '#8172B3',
+    '#64B5CD',
+    '#8C8C8C'
 ];
 
 const allUSStates = [
@@ -764,6 +783,7 @@ const allUSStates = [
 document.addEventListener('DOMContentLoaded', () => {
     populateFilters();
     renderManufacturers(manufacturers);
+    initializeFunFacts();
     attachEventListeners();
 });
 
@@ -928,7 +948,7 @@ function renderSectionMarkup(section, isFilterActive) {
         <section class="section-board">
             <div class="section-board-header">
                 <h2>${escapeHtml(section.name)}</h2>
-                <span class="section-board-total">${section.count} companies</span>
+                <span class="section-board-total">${section.count}</span>
             </div>
             <div class="subcategory-grid">
                 ${subcategoriesToRender.map(subcategory => renderSubcategoryMarkup(subcategory)).join('')}
@@ -977,12 +997,7 @@ function renderManufacturerMarkup(manufacturer) {
                 ${manufacturer.website
                     ? `<a class="manufacturer-name" href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">${escapeHtml(manufacturer.name)}</a>`
                     : `<span class="manufacturer-name">${escapeHtml(manufacturer.name)}</span>`}
-                <span class="manufacturer-meta">${escapeHtml([
-                    location,
-                    manufacturer.industry,
-                    manufacturer.employees ? `${manufacturer.employees} employees` : '',
-                    manufacturer.founded ? `founded ${manufacturer.founded}` : ''
-                ].filter(Boolean).join(' | '))}</span>
+                <span class="manufacturer-location">${escapeHtml(location)}</span>
             </div>
             <p class="manufacturer-description">${escapeHtml(manufacturer.description)}</p>
             <p class="manufacturer-products"><strong>Products:</strong> ${escapeHtml(manufacturer.products.join(', '))}</p>
@@ -1010,13 +1025,11 @@ function attachBoardEventListeners() {
             const section = card.closest('.section-board');
             const contentArea = section.querySelector('.section-content-area');
             const manufacturers = JSON.parse(card.getAttribute('data-manufacturers'));
-            const searchSection = document.querySelector('.search-section');
 
             // If clicking the same card that's already active, close it
             if (card.classList.contains('active')) {
                 card.classList.remove('active');
                 contentArea.style.display = 'none';
-                searchSection.classList.remove('has-expanded-content');
                 return;
             }
 
@@ -1035,7 +1048,6 @@ function attachBoardEventListeners() {
                 </ul>
             `;
             contentArea.style.display = 'block';
-            searchSection.classList.add('has-expanded-content');
         });
     });
 }
@@ -1085,12 +1097,66 @@ function filterManufacturers() {
     if (currentView === 'graph') {
         renderGraph(filteredManufacturers);
     }
+
 }
 
 function clearFilters() {
     stateFilter.value = '';
     industryFilter.value = '';
+    activeMapCategory = null;
     filterManufacturers();
+}
+
+async function sendChatMessage() {
+    const message = chatInput.value.trim();
+    await sendAssistantPrompt(message);
+}
+
+async function sendAssistantPrompt(message) {
+    const trimmedMessage = String(message || '').trim();
+    if (!trimmedMessage || assistantRequestInFlight) return;
+
+    startAssistantConversation();
+    assistantRequestInFlight = true;
+    chatSend.disabled = true;
+    chatInput.disabled = true;
+
+    appendChatMessage('user', escapeHtml(trimmedMessage));
+    chatInput.value = '';
+
+    const pendingMessage = appendChatMessage('bot', 'Working through the current directory context...');
+
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: trimmedMessage,
+                previousResponseId: assistantPreviousResponseId,
+                uiState: getAssistantUiState(),
+                visibleManufacturers: filteredManufacturers.map(toAssistantManufacturerContext)
+            })
+        });
+
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || 'Assistant request failed.');
+        }
+
+        assistantPreviousResponseId = payload.responseId || assistantPreviousResponseId;
+        pendingMessage.innerHTML = formatAssistantResponse(payload.answer || 'No response returned.');
+        renderAssistantResults(payload.context || []);
+    } catch (error) {
+        pendingMessage.textContent = error.message || 'Assistant request failed.';
+    } finally {
+        assistantRequestInFlight = false;
+        chatSend.disabled = false;
+        chatInput.disabled = false;
+        chatInput.focus();
+        scrollChatToBottom();
+    }
 }
 
 function attachEventListeners() {
@@ -1100,6 +1166,27 @@ function attachEventListeners() {
 
     treeViewBtn.addEventListener('click', () => switchView('tree'));
     graphViewBtn.addEventListener('click', () => switchView('graph'));
+
+    chatSend.addEventListener('click', sendChatMessage);
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendChatMessage();
+        }
+    });
+
+    if (funFactTrigger) {
+        funFactTrigger.addEventListener('click', rotateFunFact);
+    }
+
+    if (assistantQuickLinks) {
+        assistantQuickLinks.querySelectorAll('[data-prompt]').forEach(button => {
+            button.addEventListener('click', async () => {
+                const prompt = button.getAttribute('data-prompt') || '';
+                await sendAssistantPrompt(prompt);
+            });
+        });
+    }
 
     suggestBtn.addEventListener('click', () => {
         window.open('https://github.com/bihanmahadewa/americansupplychain', '_blank');
@@ -1133,6 +1220,9 @@ function renderGraph(manufacturersToGraph) {
 
     markerLayer.clearLayers();
 
+    // Generate legend
+    generateMapLegend(manufacturersToGraph);
+
     const bounds = [];
 
     manufacturersToGraph.forEach(manufacturer => {
@@ -1143,19 +1233,23 @@ function renderGraph(manufacturersToGraph) {
 
         const assignment = manufacturerAssignments.get(manufacturer.id);
         const location = formatLocation(manufacturer.location);
-        const markerColor = getIndustryColor(manufacturer.industry);
+        const markerColor = getCategoryColor(assignment);
+        const categoryLabel = getMainCategoryLabel(assignment);
+        const isActiveCategory = !activeMapCategory || categoryLabel === activeMapCategory;
 
         const marker = L.circleMarker(coordinates, {
-            radius: 5,
+            radius: isActiveCategory ? 6 : 4,
             color: markerColor,
             weight: 1,
             fillColor: markerColor,
-            fillOpacity: 0.85
+            opacity: isActiveCategory ? 1 : 0.18,
+            fillOpacity: isActiveCategory ? 0.9 : 0.12
         });
 
         marker.bindPopup(`
             <strong>${escapeHtml(manufacturer.name)}</strong><br>
             ${escapeHtml(location || 'Location unavailable')}<br>
+            ${escapeHtml(categoryLabel)}<br>
             ${escapeHtml(manufacturer.industry || 'Unknown industry')}
         `);
 
@@ -1263,5 +1357,172 @@ function getIndustryColor(industry) {
         (accumulator * 31 + character.charCodeAt(0)) >>> 0
     ), 0);
 
-    return markerPalette[hash % markerPalette.length];
+    return categoryColorPalette[hash % categoryColorPalette.length];
+}
+
+function getMainCategoryLabel(assignment) {
+    return assignment?.section || 'Other';
+}
+
+function getCategoryColor(assignment) {
+    return getIndustryColor(getMainCategoryLabel(assignment));
+}
+
+function generateMapLegend(manufacturersToGraph) {
+    const mapLegend = document.getElementById('mapLegend');
+    if (!mapLegend) return;
+
+    const categoryColors = new Map();
+    manufacturersToGraph.forEach(manufacturer => {
+        const assignment = manufacturerAssignments.get(manufacturer.id);
+        const categoryLabel = getMainCategoryLabel(assignment);
+        const color = getCategoryColor(assignment);
+        categoryColors.set(categoryLabel, color);
+    });
+
+    const sortedCategories = Array.from(categoryColors.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+    if (sortedCategories.length === 0) {
+        mapLegend.innerHTML = '';
+        return;
+    }
+
+    mapLegend.innerHTML = `
+        <h3>Map Legend</h3>
+        <p class="legend-caption">Click a category to highlight only that group.</p>
+        <button class="legend-reset${activeMapCategory ? '' : ' is-active'}" type="button" data-category="">
+            Show all categories
+        </button>
+        <div class="legend-items">
+            ${sortedCategories.map(([category, color]) => `
+                <button
+                    class="legend-item${activeMapCategory === category ? ' is-active' : ''}"
+                    type="button"
+                    data-category="${escapeAttribute(category)}"
+                >
+                    <div class="legend-color" style="background-color: ${color};"></div>
+                    <span>${escapeHtml(category)}</span>
+                </button>
+            `).join('')}
+        </div>
+    `;
+
+    mapLegend.querySelectorAll('[data-category]').forEach(element => {
+        element.addEventListener('click', () => {
+            const selectedCategory = element.getAttribute('data-category') || null;
+            activeMapCategory = selectedCategory === activeMapCategory ? null : selectedCategory;
+            renderGraph(filteredManufacturers);
+        });
+    });
+}
+
+function appendChatMessage(role, html) {
+    const message = document.createElement('div');
+    message.className = `chat-message ${role}`;
+    message.innerHTML = html;
+    chatMessages.appendChild(message);
+    scrollChatToBottom();
+    return message;
+}
+
+function scrollChatToBottom() {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function getAssistantUiState() {
+    return {
+        currentView,
+        stateFilter: stateFilter.value || null,
+        industryFilter: industryFilter.value || null,
+        activeMapCategory,
+        visibleManufacturerCount: filteredManufacturers.length
+    };
+}
+
+function toAssistantManufacturerContext(manufacturer) {
+    const assignment = manufacturerAssignments.get(manufacturer.id);
+
+    return {
+        id: manufacturer.id,
+        name: manufacturer.name,
+        industry: manufacturer.industry,
+        category: getMainCategoryLabel(assignment),
+        location: formatLocation(manufacturer.location),
+        products: manufacturer.products,
+        description: manufacturer.description,
+        website: manufacturer.website || '',
+        email: manufacturer.email || ''
+    };
+}
+
+function renderAssistantResults(items) {
+    if (!assistantResults) {
+        return;
+    }
+
+    if (!items.length) {
+        assistantResults.innerHTML = '';
+        return;
+    }
+
+    assistantResults.innerHTML = `
+        <div class="assistant-results-list">
+            ${items.map(item => `
+                <article class="assistant-result-card">
+                    <h3>${escapeHtml(item.name || 'Untitled')}</h3>
+                    <p>${escapeHtml([item.category, item.industry, item.location].filter(Boolean).join(' | '))}</p>
+                    ${item.website ? `<a href="${escapeAttribute(item.website)}" target="_blank" rel="noopener">Open website</a>` : ''}
+                </article>
+            `).join('')}
+        </div>
+    `;
+}
+
+function formatAssistantResponse(text) {
+    const paragraphs = escapeHtml(text)
+        .split(/\n{2,}/)
+        .map(block => block.replace(/\n/g, '<br>'))
+        .filter(Boolean);
+
+    return paragraphs.map(paragraph => `<p>${paragraph}</p>`).join('');
+}
+
+function initializeFunFacts() {
+    if (!funFactTrigger || !funFactCard || !funFactText) {
+        return;
+    }
+}
+
+function rotateFunFact() {
+    if (!funFactCard || !funFactText || !manufacturingFunFacts.length) {
+        return;
+    }
+
+    currentFunFactIndex = (currentFunFactIndex + 1) % manufacturingFunFacts.length;
+    funFactCard.hidden = false;
+    funFactCard.classList.remove('is-visible');
+    funFactText.textContent = manufacturingFunFacts[currentFunFactIndex];
+    requestAnimationFrame(() => {
+        funFactCard.classList.add('is-visible');
+    });
+}
+
+function startAssistantConversation() {
+    if (hasStartedAssistantConversation) {
+        return;
+    }
+
+    hasStartedAssistantConversation = true;
+    if (assistantPanelBody) {
+        assistantPanelBody.classList.remove('is-landing');
+    }
+    if (assistantQuickLinks) {
+        assistantQuickLinks.classList.add('is-hidden');
+    }
+    if (funFactTrigger) {
+        funFactTrigger.classList.add('is-hidden');
+    }
+    if (funFactCard) {
+        funFactCard.classList.add('is-hidden');
+    }
 }
