@@ -3,21 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>American Supply Chain - Made in America Directory</title>
+    <title>American Supply Chain - Industrial Directory</title>
     <link rel="stylesheet" href="styles.css">
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
     <header>
         <div class="container">
             <h1>American Supply Chain</h1>
-            <p class="tagline">Manufacturing directory</p>
+            <p class="tagline">Engineer-first supply chain index. Small type, dense information, missing data left visible.</p>
+            <p class="header-note">Every category stays on screen. Empty entries are work to do, not a reason to hide the structure.</p>
         </div>
     </header>
 
     <main class="container">
         <section class="search-section">
             <div class="search-bar">
-                <input type="text" id="searchInput" placeholder="Search by name, product, or location...">
+                <input type="text" id="searchInput" placeholder="Search company, product, section, location...">
             </div>
 
             <div class="filters">
@@ -26,30 +28,39 @@
                 </select>
 
                 <select id="industryFilter">
-                    <option value="">All Industries</option>
+                    <option value="">All Sectors</option>
                 </select>
 
-                <button id="clearFilters">Clear Filters</button>
+                <button id="clearFilters">Clear</button>
+            </div>
+
+            <div class="view-controls">
+                <button id="treeViewBtn" class="view-btn active">List</button>
+                <button id="graphViewBtn" class="view-btn">Map</button>
             </div>
 
             <div class="results-info">
-                <span id="resultsCount">0 manufacturers found</span>
+                <span id="resultsCount">0 manufacturers indexed</span>
             </div>
         </section>
 
         <section class="directory-grid" id="directoryGrid">
-            <!-- Manufacturer cards will be inserted here -->
+            <!-- Category directory will be inserted here -->
+        </section>
+
+        <section class="graph-container" id="graphContainer" style="display: none;">
+            <div id="networkGraph"></div>
         </section>
 
         <section class="add-manufacturer">
-            <p>Know a manufacturer that should be listed?</p>
-            <button id="suggestBtn">Suggest a Manufacturer</button>
+            <p>Know a company that belongs in one of the missing categories?</p>
+            <button id="suggestBtn">Submit Lead</button>
         </section>
     </main>
 
     <footer>
         <div class="container">
-            <p>Supporting American manufacturing and local supply chains</p>
+            <p>American manufacturing directory. Dense by default.</p>
         </div>
     </footer>
 
