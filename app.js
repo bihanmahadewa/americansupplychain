@@ -266,8 +266,28 @@ const tierTaxonomy = [
                         ]
                     },
                     {
+                        name: '3D printing',
+                        industryMatches: [
+                            '3D Printing',
+                            'Additive Manufacturing',
+                            'Metal 3D Printing',
+                            '3D Printing Services',
+                            'Construction 3D Printing'
+                        ],
+                        keywordMatches: [
+                            '3d printing',
+                            'additive manufacturing',
+                            'binder jetting',
+                            'sla',
+                            'sls',
+                            'fdm',
+                            'metal additive',
+                            'large-scale 3d printing'
+                        ]
+                    },
+                    {
                         name: 'Powder metallurgy',
-                        industryMatches: ['Metal 3D Printing', 'Additive Manufacturing'],
+                        industryMatches: [],
                         keywordMatches: ['powder metallurgy', 'binder jetting', 'metal 3d printing']
                     }
                 ]
@@ -454,10 +474,26 @@ const tierTaxonomy = [
             {
                 name: 'Quality + Validation',
                 subcategories: [
-                    { name: 'CMM / metrology', industryMatches: [], keywordMatches: ['metrology', 'cmm'] },
-                    { name: 'Non-destructive testing', industryMatches: [], keywordMatches: ['non-destructive testing', 'ndt'] },
-                    { name: 'PPAP / process validation', industryMatches: [], keywordMatches: ['ppap', 'process validation'] },
-                    { name: 'Cleanroom qualification', industryMatches: [], keywordMatches: ['cleanroom qualification', 'cleanroom'] }
+                    {
+                        name: 'CMM / metrology',
+                        industryMatches: ['CMM / Metrology'],
+                        keywordMatches: ['metrology', 'cmm', 'dimensional measurement', 'inspection systems', 'calibration']
+                    },
+                    {
+                        name: 'Non-destructive testing',
+                        industryMatches: ['Non-Destructive Testing'],
+                        keywordMatches: ['non-destructive testing', 'ndt', 'inspection services', 'visual testing']
+                    },
+                    {
+                        name: 'PPAP / process validation',
+                        industryMatches: ['PPAP / Process Validation'],
+                        keywordMatches: ['ppap', 'process validation', 'apqp', 'supplier validation']
+                    },
+                    {
+                        name: 'Cleanroom qualification',
+                        industryMatches: ['Cleanroom Qualification'],
+                        keywordMatches: ['cleanroom qualification', 'cleanroom', 'cleanroom certification', 'cleanroom testing']
+                    }
                 ]
             }
         ]
@@ -469,10 +505,26 @@ const tierTaxonomy = [
             {
                 name: 'Infra + Logistics',
                 subcategories: [
-                    { name: 'Grid-scale energy storage', industryMatches: [], keywordMatches: ['grid-scale energy storage'] },
-                    { name: 'Freight / shipping', industryMatches: [], keywordMatches: ['freight', 'shipping'] },
-                    { name: 'Warehousing / cold chain', industryMatches: [], keywordMatches: ['warehousing', 'cold chain'] },
-                    { name: 'Packaging / kitting', industryMatches: [], keywordMatches: ['packaging', 'kitting'] }
+                    {
+                        name: 'Grid-scale energy storage',
+                        industryMatches: ['Grid-Scale Energy Storage'],
+                        keywordMatches: ['grid-scale energy storage', 'bess', 'megapack', 'long-duration storage', 'battery energy storage']
+                    },
+                    {
+                        name: 'Freight / shipping',
+                        industryMatches: ['Freight / Shipping'],
+                        keywordMatches: ['freight', 'shipping', 'ltl', 'truckload', 'intermodal', 'parcel']
+                    },
+                    {
+                        name: 'Warehousing / cold chain',
+                        industryMatches: ['Warehousing / Cold Chain'],
+                        keywordMatches: ['warehousing', 'cold chain', 'cold storage', 'refrigerated warehousing']
+                    },
+                    {
+                        name: 'Packaging / kitting',
+                        industryMatches: ['Packaging / Kitting'],
+                        keywordMatches: ['packaging', 'kitting', 'bundling', 'contract packaging']
+                    }
                 ]
             },
             {
@@ -493,44 +545,6 @@ const tierTaxonomy = [
                         industryMatches: ['Digital Manufacturing', 'Manufacturing Software', 'Rapid Manufacturing'],
                         keywordMatches: ['cad', 'cam', 'simulation', 'digital fabrication', 'quoting']
                     }
-                ]
-            }
-        ]
-    },
-    {
-        tier: 'F',
-        label: 'Software wrapper layer',
-        sections: [
-            {
-                name: 'The software layer (derogatory)',
-                subcategories: [
-                    {
-                        name: 'Procurement platform',
-                        industryMatches: ['Manufacturing Marketplace'],
-                        keywordMatches: ['procurement', 'marketplace']
-                    },
-                    {
-                        name: '"Supply chain visibility"',
-                        industryMatches: ['Industrial Supply'],
-                        keywordMatches: ['supply chain visibility', 'industrial supply']
-                    },
-                    {
-                        name: '"Digital twin" (derogatory)',
-                        industryMatches: ['Manufacturing Technology'],
-                        keywordMatches: ['digital twin']
-                    },
-                    {
-                        name: '"Industry 4.0 platform"',
-                        industryMatches: ['Manufacturing Software'],
-                        keywordMatches: ['industry 4.0', 'manufacturing software']
-                    },
-                    {
-                        name: '"AI-powered" quality inspection',
-                        industryMatches: [],
-                        keywordMatches: ['quality assurance', 'quality control', 'ai-enabled manufacturing']
-                    },
-                    { name: 'Blockchain for supply chain', industryMatches: [], keywordMatches: ['blockchain'] },
-                    { name: 'Carbon credit marketplace', industryMatches: [], keywordMatches: ['carbon credit'] }
                 ]
             }
         ]
@@ -676,6 +690,24 @@ const cityCoordinates = {
     "wooster|ohio": [40.8051, -81.9351],
     "zeeland|michigan": [42.8125, -86.0186]
 };
+
+const markerPalette = [
+    '#1f77b4',
+    '#ff7f0e',
+    '#2ca02c',
+    '#d62728',
+    '#9467bd',
+    '#8c564b',
+    '#e377c2',
+    '#7f7f7f',
+    '#bcbd22',
+    '#17becf',
+    '#393b79',
+    '#637939',
+    '#8c6d31',
+    '#843c39',
+    '#7b4173'
+];
 
 document.addEventListener('DOMContentLoaded', () => {
     populateFilters();
@@ -1067,23 +1099,20 @@ function renderGraph(manufacturersToGraph) {
 
         const assignment = manufacturerAssignments.get(manufacturer.id);
         const location = formatLocation(manufacturer.location);
-        const classification = assignment
-            ? `${assignment.section} / ${assignment.subcategory}`
-            : 'Unmapped lead';
+        const markerColor = getIndustryColor(manufacturer.industry);
 
         const marker = L.circleMarker(coordinates, {
             radius: 5,
-            color: '#111111',
+            color: markerColor,
             weight: 1,
-            fillColor: '#111111',
+            fillColor: markerColor,
             fillOpacity: 0.85
         });
 
         marker.bindPopup(`
             <strong>${escapeHtml(manufacturer.name)}</strong><br>
             ${escapeHtml(location || 'Location unavailable')}<br>
-            ${escapeHtml(manufacturer.industry || 'Unknown industry')}<br>
-            ${escapeHtml(classification)}
+            ${escapeHtml(manufacturer.industry || 'Unknown industry')}
         `);
 
         markerLayer.addLayer(marker);
@@ -1182,4 +1211,13 @@ function resolveStateKey(rawState) {
     }
 
     return '';
+}
+
+function getIndustryColor(industry) {
+    const token = normalizeGeographyToken(industry || 'unknown');
+    const hash = token.split('').reduce((accumulator, character) => (
+        (accumulator * 31 + character.charCodeAt(0)) >>> 0
+    ), 0);
+
+    return markerPalette[hash % markerPalette.length];
 }
