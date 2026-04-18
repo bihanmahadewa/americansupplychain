@@ -43,7 +43,7 @@ a:hover {
 }
 
 .page-shell {
-    width: calc(100% - var(--assistant-panel-width) - var(--assistant-panel-gap));
+    width: 100%;
     min-height: 100vh;
 }
 
@@ -218,10 +218,33 @@ header h1 {
     transition: opacity 0.2s ease;
 }
 
-.section-content-area .manufacturer-list {
+.manufacturer-table {
     display: table;
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.section-content-area .manufacturer-list {
+    display: table-row-group;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.manufacturer-table-header {
+    display: table-header-group;
+    font-size: 11px;
+    color: var(--soft);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.manufacturer-table-header span {
+    display: table-cell;
+    padding: 0 16px 8px;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: bottom;
 }
 
 .section-content-area .manufacturer-item {
@@ -240,7 +263,7 @@ header h1 {
     display: table-cell;
     padding: 12px 16px;
     vertical-align: top;
-    min-width: 250px;
+    width: 22%;
 }
 
 .manufacturer-name {
@@ -261,6 +284,7 @@ header h1 {
     padding: 12px 16px;
     border-bottom: 1px solid #f0f0f0;
     vertical-align: top;
+    width: 39%;
 }
 
 .section-content-area .manufacturer-products {
@@ -268,6 +292,7 @@ header h1 {
     padding: 12px 16px;
     border-bottom: 1px solid #f0f0f0;
     vertical-align: top;
+    width: 18%;
 }
 
 .section-content-area .manufacturer-links {
@@ -275,6 +300,7 @@ header h1 {
     padding: 12px 16px;
     border-bottom: 1px solid #f0f0f0;
     white-space: nowrap;
+    width: 21%;
 }
 
 .subcategory-card {
@@ -340,17 +366,7 @@ header h1 {
 }
 
 .assistant-panel {
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: var(--assistant-panel-width);
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    background: #fbfbfb;
-    border-left: 1px solid #e6e6e6;
-    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.06);
-    z-index: 1100;
+    display: none;
 }
 
 .assistant-panel-body {

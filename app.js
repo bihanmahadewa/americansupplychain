@@ -1000,7 +1000,7 @@ function renderManufacturerMarkup(manufacturer) {
                 <span class="manufacturer-location">${escapeHtml(location)}</span>
             </div>
             <p class="manufacturer-description">${escapeHtml(manufacturer.description)}</p>
-            <p class="manufacturer-products"><strong>Products:</strong> ${escapeHtml(manufacturer.products.join(', '))}</p>
+            <p class="manufacturer-products">${escapeHtml(manufacturer.products.join(', '))}</p>
             ${links ? `<p class="manufacturer-links">${links}</p>` : ''}
         </li>
     `;
@@ -1043,9 +1043,17 @@ function attachBoardEventListeners() {
 
             // Populate content area
             contentArea.innerHTML = `
-                <ul class="manufacturer-list">
-                    ${manufacturers.map(renderManufacturerMarkup).join('')}
-                </ul>
+                <div class="manufacturer-table">
+                    <div class="manufacturer-table-header">
+                        <span>Company</span>
+                        <span>Description</span>
+                        <span>Products</span>
+                        <span>Links</span>
+                    </div>
+                    <ul class="manufacturer-list">
+                        ${manufacturers.map(renderManufacturerMarkup).join('')}
+                    </ul>
+                </div>
             `;
             contentArea.style.display = 'block';
         });
