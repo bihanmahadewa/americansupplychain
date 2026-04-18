@@ -390,20 +390,28 @@ header h1 {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: center;
 }
 
 .assistant-panel-body.is-landing .assistant-messages {
     flex: 0 0 auto;
-}
-
-.assistant-panel-body.is-landing .assistant-quick-links,
-.assistant-panel-body.is-landing .fun-fact-trigger,
-.assistant-panel-body.is-landing .fun-fact-card {
-    flex: 0 0 auto;
+    width: 100%;
 }
 
 .assistant-panel-body.is-landing .assistant-results {
     display: none;
+}
+
+.assistant-panel-body.is-landing .fun-fact-card {
+    width: 100%;
+    max-width: 320px;
+    margin: 12px auto 0;
+}
+
+.assistant-bottom-tools {
+    padding: 8px 18px 10px;
+    border-top: 1px solid #f3f3f3;
+    background: #fff;
 }
 
 .assistant-quick-links,
@@ -422,8 +430,28 @@ header h1 {
     justify-content: center;
     align-items: center;
     gap: 6px 10px;
-    margin: 16px 0 8px;
+    margin: 0 0 8px;
     max-height: 420px;
+}
+
+.assistant-powered {
+    width: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #5f5650;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.assistant-powered-logo {
+    width: 18px;
+    height: 18px;
+    opacity: 0.9;
 }
 
 .assistant-quick-link {
@@ -451,6 +479,7 @@ header h1 {
 }
 
 .assistant-quick-links.is-hidden,
+.assistant-powered.is-hidden,
 .fun-fact-trigger.is-hidden,
 .fun-fact-card.is-hidden {
     opacity: 0;
@@ -490,20 +519,32 @@ header h1 {
     line-height: 1.5;
 }
 
+.chat-message p {
+    margin: 0;
+}
+
 .chat-message.bot {
     background: #ffffff;
     border: 1px solid #ececec;
 }
 
 .chat-message.bot.is-loading {
-    min-width: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-start;
+    width: fit-content;
+    max-width: fit-content;
+    min-width: 0;
+    min-height: 0;
+    padding: 8px 10px;
 }
 
 .typing-dots {
     display: inline-flex;
     gap: 0;
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1;
     color: #666;
 }
 
@@ -530,7 +571,7 @@ header h1 {
 }
 
 .chat-message.bot p + p {
-    margin-top: 10px;
+    margin-top: 6px;
 }
 
 .chat-message.user {

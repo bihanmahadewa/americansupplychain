@@ -15,6 +15,7 @@ const chatMessages = document.getElementById('chatMessages');
 const assistantResults = document.getElementById('assistantResults');
 const assistantPanelBody = document.getElementById('assistantPanelBody');
 const assistantQuickLinks = document.getElementById('assistantQuickLinks');
+const assistantPowered = document.getElementById('assistantPowered');
 const funFactTrigger = document.getElementById('funFactTrigger');
 const funFactCard = document.getElementById('funFactCard');
 const funFactText = document.getElementById('funFactText');
@@ -1541,18 +1542,46 @@ function initializeFunFacts() {
     }
 }
 
-function rotateFunFact() {
+async function rotateFunFact() {
     if (!funFactCard || !funFactText || !manufacturingFunFacts.length) {
         return;
     }
 
-    currentFunFactIndex = (currentFunFactIndex + 1) % manufacturingFunFacts.length;
+    if (funFactTrigger) {
+        funFactTrigger.disabled = true;
+    }
     funFactCard.hidden = false;
     funFactCard.classList.remove('is-visible');
-    funFactText.textContent = manufacturingFunFacts[currentFunFactIndex];
-    requestAnimationFrame(() => {
-        funFactCard.classList.add('is-visible');
-    });
+    funFactText.textContent = nextLocalFunFact();
+
+    try {
+        const response = await fetch('/api/fun-fact', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || 'Fun fact request failed.');
+        }
+        funFactText.textContent = String(payload.fact || '').trim() || nextLocalFunFact();
+    } catch (error) {
+        funFactText.textContent = nextLocalFunFact();
+    } finally {
+        if (funFactTrigger) {
+            funFactTrigger.disabled = false;
+        }
+        requestAnimationFrame(() => {
+            funFactCard.classList.add('is-visible');
+        });
+    }
+}
+
+function nextLocalFunFact() {
+    currentFunFactIndex = (currentFunFactIndex + 1) % manufacturingFunFacts.length;
+    return manufacturingFunFacts[currentFunFactIndex];
 }
 
 function startAssistantConversation() {
@@ -1566,6 +1595,9 @@ function startAssistantConversation() {
     }
     if (assistantQuickLinks) {
         assistantQuickLinks.classList.add('is-hidden');
+    }
+    if (assistantPowered) {
+        assistantPowered.classList.add('is-hidden');
     }
     if (funFactTrigger) {
         funFactTrigger.classList.add('is-hidden');

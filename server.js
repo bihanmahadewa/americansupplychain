@@ -9,6 +9,14 @@ const ROOT = __dirname;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1';
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || '';
+const FUN_FACTS_CACHE_PATH = path.join(ROOT, 'fun-facts-cache.json');
+const DEFAULT_FUN_FACTS = [
+    'The Springfield Armory helped pioneer interchangeable parts manufacturing in the U.S. during the 1800s.',
+    'By 1913, Ford cut Model T assembly time to about 93 minutes, redefining industrial scale.',
+    'WWII factory conversion helped U.S. industry build ships, aircraft, and vehicles at historic speed.',
+    'American machine tool makers enabled precision production across aerospace, auto, and defense.',
+    'Containerization and logistics innovation helped U.S. manufacturers ship faster and cheaper worldwide.'
+];
 
 const MIME_TYPES = {
     '.css': 'text/css; charset=utf-8',
@@ -25,6 +33,8 @@ const MIME_TYPES = {
 
 const workspaceFiles = buildWorkspaceFileManifest();
 const manufacturers = loadManufacturers();
+let funFactsCache = loadFunFactsCache();
+let funFactCursor = 0;
 
 const server = http.createServer(async (req, res) => {
     try {
@@ -37,7 +47,10 @@ const server = http.createServer(async (req, res) => {
             await handleChatRequest(req, res);
             return;
         }
-
+        if (req.method === 'POST' && req.url === '/api/fun-fact') {
+            await handleFunFactRequest(req, res);
+            return;
+        }
         if (req.method === 'GET') {
             await serveStaticFile(req, res);
             return;
@@ -118,23 +131,39 @@ async function handleChatRequest(req, res) {
                             {
                                 type: 'input_text',
                                 text: [
-                                    'You are the American Supply Chain directory assistant.',
+                                    'You are the American Supply Chain Directory Assistant.',
                                     'Use file_search results and the provided candidate list.',
                                     'Return strict JSON only.',
                                     'Schema:',
                                     '{"mode":"clarify|recommend","answer":"string","follow_up_questions":["string"],"top_matches":[{"name":"string","reason":"string"}]}',
-                                    'Rules:',
-                                    '- If user asks a general or aggregate question (for example, "how many" or "count"), answer directly from available evidence instead of asking clarifying questions.',
-                                    '- If user intent/details are incomplete, set mode to clarify.',
-                                    '- In clarify mode, ask exactly one short targeted follow-up question.',
-                                    '- In clarify mode, be direct and concise. Do not use thank-you/preamble language.',
-                                    '- In clarify mode, answer should contain only that one question.',
-                                    '- In clarify mode, top_matches must be empty.',
-                                    '- Once enough details are available, set mode to recommend.',
-                                    '- In recommend mode, include 3-5 manufacturers.',
-                                    '- Only recommend manufacturers present in candidates.',
-                                    '- If evidence is weak, say that clearly in answer.',
-                                    '- Keep answer very short: maximum 200 characters.'
+                                    'Core Behavior:',
+                                    '* Be direct. No fluff. No filler.',
+                                    '* If the question is generic, give a generic, concise answer immediately.',
+                                    '* If the question is specific but missing key details, enter clarify mode.',
+                                    '* If enough detail exists, enter recommend mode.',
+                                    'Clarify Mode Rules:',
+                                    '* Set "mode": "clarify"',
+                                    '* Ask exactly one sharp, targeted question',
+                                    '* No extra text. No explanations.',
+                                    '* "answer" must contain only that question',
+                                    '* "follow_up_questions" must contain that same question',
+                                    '* "top_matches" must be empty',
+                                    'Recommend Mode Rules:',
+                                    '* Set "mode": "recommend"',
+                                    '* Provide 3-5 matches max',
+                                    '* Only use candidates from the provided list',
+                                    '* Each match must include a clear, specific reason',
+                                    '* If evidence is weak or incomplete, state that directly',
+                                    '* Keep "answer" under 200 characters',
+                                    'Direct Answer Rules (No Clarify Needed):',
+                                    '* If the user asks:',
+                                    '  * aggregate questions ("how many", "count")',
+                                    '  * strategy questions ("where to start", "priorities")',
+                                    '    -> answer directly, no clarification',
+                                    'Tone Constraints:',
+                                    '* Minimal, factual, surgical',
+                                    '* No politeness padding',
+                                    '* No assumptions beyond available data'
                                 ].join(' ')
                             }
                         ]
@@ -181,7 +210,10 @@ async function handleChatRequest(req, res) {
 
     const outputText = extractOutputText(payload);
     const parsed = tryParseAssistantJson(outputText);
-    const mode = parsed?.mode === 'clarify' ? 'clarify' : 'recommend';
+    const forceRecommend = shouldForceRecommendMode(userMessage);
+    const mode = forceRecommend
+        ? 'recommend'
+        : (parsed?.mode === 'clarify' ? 'clarify' : 'recommend');
     const topMatches = Array.isArray(parsed?.top_matches) ? parsed.top_matches : [];
     const selectedManufacturers = selectManufacturersByName(
         candidatePool,
@@ -201,6 +233,15 @@ async function handleChatRequest(req, res) {
         context: mode === 'clarify'
             ? []
             : (selectedManufacturers.length ? selectedManufacturers : context.relevantManufacturers.slice(0, 5))
+    });
+}
+
+async function handleFunFactRequest(req, res) {
+    const fact = nextCachedFunFact();
+
+    sendJson(res, 200, {
+        fact,
+        model: 'local-cache'
     });
 }
 
@@ -462,6 +503,76 @@ function clampAnswerLength(value, maxLength) {
         return text;
     }
     return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+}
+
+function clampFunFact(value) {
+    const text = String(value || '')
+        .replace(/\s+/g, ' ')
+        .replace(/^["'`]+|["'`]+$/g, '')
+        .trim();
+    if (!text) {
+        return '';
+    }
+    if (text.length <= 160) {
+        return text;
+    }
+    return `${text.slice(0, 159).trim()}…`;
+}
+
+function loadFunFactsCache() {
+    try {
+        if (!fs.existsSync(FUN_FACTS_CACHE_PATH)) {
+            return [...DEFAULT_FUN_FACTS];
+        }
+
+        const raw = fs.readFileSync(FUN_FACTS_CACHE_PATH, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+            return [...DEFAULT_FUN_FACTS];
+        }
+
+        const cleaned = parsed
+            .map(item => clampFunFact(item))
+            .filter(Boolean);
+
+        return cleaned.length ? cleaned : [...DEFAULT_FUN_FACTS];
+    } catch (error) {
+        console.error('Failed to load fun facts cache:', error);
+        return [...DEFAULT_FUN_FACTS];
+    }
+}
+
+function nextCachedFunFact() {
+    if (!funFactsCache.length) {
+        funFactsCache = [...DEFAULT_FUN_FACTS];
+        funFactCursor = 0;
+    }
+
+    const fact = funFactsCache[funFactCursor % funFactsCache.length];
+    funFactCursor = (funFactCursor + 1) % Math.max(1, funFactsCache.length);
+
+    return fact;
+}
+
+function shouldForceRecommendMode(message) {
+    const text = String(message || '').toLowerCase();
+    if (!text) {
+        return false;
+    }
+
+    const strategySignals = [
+        'what categories',
+        'which categories',
+        'where should i start',
+        'where do i start',
+        'how should i start',
+        'top priorities',
+        'look at first',
+        'first when sourcing',
+        'in general'
+    ];
+
+    return strategySignals.some(signal => text.includes(signal));
 }
 
 function readJsonBody(req) {
