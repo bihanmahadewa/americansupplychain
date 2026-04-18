@@ -298,6 +298,11 @@ header h1 {
     color: #444;
 }
 
+.manufacturer-chip-source {
+    background: #ece7dc;
+    color: #6b5430;
+}
+
 .manufacturer-location {
     display: block;
     font-size: 13px;
