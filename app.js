@@ -1075,7 +1075,7 @@ function renderManufacturerMarkup(manufacturer) {
     const location = formatLocation(manufacturer.location);
     const links = [
         manufacturer.website
-            ? `<a href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">site</a>`
+            ? `<a href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">${escapeHtml(formatWebsiteLabel(manufacturer.website))}</a>`
             : '<span class="manufacturer-link-muted">no website found</span>',
         manufacturer.twitter && manufacturer.twitterUrl
             ? `<a href="${escapeAttribute(manufacturer.twitterUrl)}" target="_blank" rel="noopener">${escapeHtml(manufacturer.twitter)}</a>`
@@ -1127,6 +1127,22 @@ function renderManufacturerBadges(manufacturer) {
     }
 
     return `<div class="manufacturer-chips">${badges.join('')}</div>`;
+}
+
+function formatWebsiteLabel(website) {
+    if (!website) {
+        return '';
+    }
+
+    try {
+        const hostname = new URL(website).hostname.toLowerCase();
+        return hostname.replace(/^www\./, '');
+    } catch (error) {
+        return String(website)
+            .replace(/^https?:\/\//i, '')
+            .replace(/^www\./i, '')
+            .replace(/\/.*$/, '');
+    }
 }
 
 function formatEstablishedLabel(founded) {
