@@ -272,11 +272,41 @@ header h1 {
     display: block;
 }
 
+.manufacturer-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.manufacturer-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #111;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.4;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.manufacturer-chip-secondary {
+    background: #f2f2f2;
+    color: #444;
+}
+
 .manufacturer-location {
     display: block;
     font-size: 13px;
     color: var(--muted);
     margin-top: 4px;
+}
+
+.manufacturer-link-muted {
+    color: var(--muted);
 }
 
 .section-content-area .manufacturer-description {

@@ -545,7 +545,7 @@ const tierTaxonomy = [
                     },
                     {
                         name: 'PLCs / motion control',
-                        industryMatches: ['Manufacturing Automation'],
+                        industryMatches: ['Manufacturing Automation', 'PLCs / Motion Control'],
                         keywordMatches: ['plcs', 'motion control']
                     },
                     {
@@ -971,8 +971,10 @@ function renderSubcategoryMarkup(subcategory) {
         `;
     }
 
+    const serializedManufacturers = encodeURIComponent(JSON.stringify(subcategory.manufacturers));
+
     return `
-        <div class="subcategory-card has-data" data-subcategory-key="${escapeHtml(subcategory.key)}" data-manufacturers='${JSON.stringify(subcategory.manufacturers)}'>
+        <div class="subcategory-card has-data" data-subcategory-key="${escapeHtml(subcategory.key)}" data-manufacturers="${escapeAttribute(serializedManufacturers)}">
             <div class="subcategory-summary">
                 <span class="subcategory-name">${escapeHtml(subcategory.name)}</span>
                 <span class="subcategory-badge">${subcategory.manufacturers.length}</span>
@@ -984,12 +986,15 @@ function renderSubcategoryMarkup(subcategory) {
 function renderManufacturerMarkup(manufacturer) {
     const location = formatLocation(manufacturer.location);
     const links = [
-        manufacturer.website ? `<a href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">site</a>` : '',
+        manufacturer.website
+            ? `<a href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">site</a>`
+            : '<span class="manufacturer-link-muted">no website found</span>',
         manufacturer.twitter && manufacturer.twitterUrl
             ? `<a href="${escapeAttribute(manufacturer.twitterUrl)}" target="_blank" rel="noopener">${escapeHtml(manufacturer.twitter)}</a>`
             : '',
         manufacturer.email ? `<a href="mailto:${escapeAttribute(manufacturer.email)}">email</a>` : ''
     ].filter(Boolean).join(' | ');
+    const badges = renderManufacturerBadges(manufacturer);
 
     return `
         <li class="manufacturer-item">
@@ -997,13 +1002,67 @@ function renderManufacturerMarkup(manufacturer) {
                 ${manufacturer.website
                     ? `<a class="manufacturer-name" href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">${escapeHtml(manufacturer.name)}</a>`
                     : `<span class="manufacturer-name">${escapeHtml(manufacturer.name)}</span>`}
+                ${badges}
                 <span class="manufacturer-location">${escapeHtml(location)}</span>
             </div>
             <p class="manufacturer-description">${escapeHtml(manufacturer.description)}</p>
             <p class="manufacturer-products">${escapeHtml(manufacturer.products.join(', '))}</p>
-            ${links ? `<p class="manufacturer-links">${links}</p>` : ''}
+            <p class="manufacturer-links">${links}</p>
         </li>
     `;
+}
+
+function renderManufacturerBadges(manufacturer) {
+    const foundedLabel = formatEstablishedLabel(manufacturer.founded);
+
+    if (!manufacturer.ycCompany && !manufacturer.ycBatch && !foundedLabel) {
+        return '';
+    }
+
+    const badges = [];
+
+    if (manufacturer.ycCompany) {
+        badges.push('<span class="manufacturer-chip">YC</span>');
+    }
+
+    if (manufacturer.ycBatch) {
+        badges.push(`<span class="manufacturer-chip manufacturer-chip-secondary">${escapeHtml(shortenYcBatch(manufacturer.ycBatch))}</span>`);
+    }
+
+    if (foundedLabel) {
+        badges.push(`<span class="manufacturer-chip manufacturer-chip-secondary">${escapeHtml(foundedLabel)}</span>`);
+    }
+
+    return `<div class="manufacturer-chips">${badges.join('')}</div>`;
+}
+
+function formatEstablishedLabel(founded) {
+    if (founded === null || founded === undefined || founded === '') {
+        return '';
+    }
+
+    const foundedString = String(founded).trim();
+    if (!/^\d{4}$/.test(foundedString)) {
+        return '';
+    }
+
+    return `Established ${foundedString}`;
+}
+
+function shortenYcBatch(batch) {
+    const match = String(batch || '').match(/^(Spring|Summer|Fall|Winter)\s+(\d{4})$/i);
+    if (!match) {
+        return String(batch || '');
+    }
+
+    const seasonMap = {
+        spring: 'Sp',
+        summer: 'Su',
+        fall: 'F',
+        winter: 'W'
+    };
+
+    return `${seasonMap[match[1].toLowerCase()] || match[1]}${match[2]}`;
 }
 
 function updateResultsSummary(boardData, visibleCount) {
@@ -1024,7 +1083,7 @@ function attachBoardEventListeners() {
         card.addEventListener('click', () => {
             const section = card.closest('.section-board');
             const contentArea = section.querySelector('.section-content-area');
-            const manufacturers = JSON.parse(card.getAttribute('data-manufacturers'));
+            const manufacturers = JSON.parse(decodeURIComponent(card.getAttribute('data-manufacturers') || '[]'));
 
             // If clicking the same card that's already active, close it
             if (card.classList.contains('active')) {
