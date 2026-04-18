@@ -15,6 +15,7 @@ const chatMessages = document.getElementById('chatMessages');
 const assistantResults = document.getElementById('assistantResults');
 const assistantPanelBody = document.getElementById('assistantPanelBody');
 const assistantQuickLinks = document.getElementById('assistantQuickLinks');
+const assistantPowered = document.getElementById('assistantPowered');
 const funFactTrigger = document.getElementById('funFactTrigger');
 const funFactCard = document.getElementById('funFactCard');
 const funFactText = document.getElementById('funFactText');
@@ -1300,7 +1301,16 @@ async function sendAssistantPrompt(message) {
     appendChatMessage('user', escapeHtml(trimmedMessage));
     chatInput.value = '';
 
-    const pendingMessage = appendChatMessage('bot', 'Working through the current directory context...');
+    const pendingMessage = appendChatMessage('bot', '');
+    pendingMessage.classList.add('is-loading');
+    pendingMessage.innerHTML = `
+        <span class="typing-dots" aria-label="Assistant is typing" role="status">
+            <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+        </span>
+    `;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 50_000);
 
     try {
         const response = await fetch('/api/chat', {
@@ -1308,6 +1318,7 @@ async function sendAssistantPrompt(message) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            signal: controller.signal,
             body: JSON.stringify({
                 message: trimmedMessage,
                 previousResponseId: assistantPreviousResponseId,
@@ -1322,11 +1333,18 @@ async function sendAssistantPrompt(message) {
         }
 
         assistantPreviousResponseId = payload.responseId || assistantPreviousResponseId;
+        pendingMessage.classList.remove('is-loading');
         pendingMessage.innerHTML = formatAssistantResponse(payload.answer || 'No response returned.');
         renderAssistantResults(payload.context || []);
     } catch (error) {
-        pendingMessage.textContent = error.message || 'Assistant request failed.';
+        pendingMessage.classList.remove('is-loading');
+        if (error && error.name === 'AbortError') {
+            pendingMessage.textContent = 'Assistant request timed out. Please try again.';
+        } else {
+            pendingMessage.textContent = error.message || 'Assistant request failed.';
+        }
     } finally {
+        clearTimeout(timeout);
         assistantRequestInFlight = false;
         chatSend.disabled = false;
         chatInput.disabled = false;
@@ -1637,21 +1655,44 @@ function renderAssistantResults(items) {
     }
 
     if (!items.length) {
-        assistantResults.innerHTML = '';
         return;
     }
 
-    assistantResults.innerHTML = `
-        <div class="assistant-results-list">
-            ${items.map(item => `
-                <article class="assistant-result-card">
-                    <h3>${escapeHtml(item.name || 'Untitled')}</h3>
-                    <p>${escapeHtml([item.category, item.industry, item.location].filter(Boolean).join(' | '))}</p>
-                    ${item.website ? `<a href="${escapeAttribute(item.website)}" target="_blank" rel="noopener">Open website</a>` : ''}
-                </article>
-            `).join('')}
-        </div>
-    `;
+    let list = assistantResults.querySelector('.assistant-results-list');
+    if (!list) {
+        list = document.createElement('div');
+        list.className = 'assistant-results-list';
+        assistantResults.appendChild(list);
+    }
+
+    const existingKeys = new Set(
+        Array.from(list.querySelectorAll('[data-company-key]'))
+            .map(node => node.getAttribute('data-company-key') || '')
+            .filter(Boolean)
+    );
+
+    items.forEach(item => {
+        const name = item.name || 'Untitled';
+        const companyKey = name.trim().toLowerCase();
+        if (companyKey && existingKeys.has(companyKey)) {
+            return;
+        }
+
+        const card = document.createElement('article');
+        card.className = 'assistant-result-card';
+        if (companyKey) {
+            card.setAttribute('data-company-key', companyKey);
+            existingKeys.add(companyKey);
+        }
+
+        const details = [item.category, item.industry, item.location].filter(Boolean).join(' | ');
+        card.innerHTML = `
+            <h3>${escapeHtml(name)}</h3>
+            <p>${escapeHtml(details)}</p>
+            ${item.website ? `<a href="${escapeAttribute(item.website)}" target="_blank" rel="noopener">Open website</a>` : ''}
+        `;
+        list.appendChild(card);
+    });
 }
 
 function formatAssistantResponse(text) {
@@ -1669,18 +1710,46 @@ function initializeFunFacts() {
     }
 }
 
-function rotateFunFact() {
+async function rotateFunFact() {
     if (!funFactCard || !funFactText || !manufacturingFunFacts.length) {
         return;
     }
 
-    currentFunFactIndex = (currentFunFactIndex + 1) % manufacturingFunFacts.length;
+    if (funFactTrigger) {
+        funFactTrigger.disabled = true;
+    }
     funFactCard.hidden = false;
     funFactCard.classList.remove('is-visible');
-    funFactText.textContent = manufacturingFunFacts[currentFunFactIndex];
-    requestAnimationFrame(() => {
-        funFactCard.classList.add('is-visible');
-    });
+    funFactText.textContent = nextLocalFunFact();
+
+    try {
+        const response = await fetch('/api/fun-fact', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || 'Fun fact request failed.');
+        }
+        funFactText.textContent = String(payload.fact || '').trim() || nextLocalFunFact();
+    } catch (error) {
+        funFactText.textContent = nextLocalFunFact();
+    } finally {
+        if (funFactTrigger) {
+            funFactTrigger.disabled = false;
+        }
+        requestAnimationFrame(() => {
+            funFactCard.classList.add('is-visible');
+        });
+    }
+}
+
+function nextLocalFunFact() {
+    currentFunFactIndex = (currentFunFactIndex + 1) % manufacturingFunFacts.length;
+    return manufacturingFunFacts[currentFunFactIndex];
 }
 
 function startAssistantConversation() {
@@ -1694,6 +1763,9 @@ function startAssistantConversation() {
     }
     if (assistantQuickLinks) {
         assistantQuickLinks.classList.add('is-hidden');
+    }
+    if (assistantPowered) {
+        assistantPowered.classList.add('is-hidden');
     }
     if (funFactTrigger) {
         funFactTrigger.classList.add('is-hidden');

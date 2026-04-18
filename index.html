@@ -102,15 +102,11 @@
 
     <aside class="assistant-panel" id="assistantPanel">
         <div class="assistant-panel-body is-landing" id="assistantPanelBody">
-            <div class="assistant-messages" id="chatMessages">
+            <div class="assistant-powered" id="assistantPowered">
+                <img src="openai.svg" alt="OpenAI logo" class="assistant-powered-logo">
+                <span>CHAT WITH SUPPLY CHAIN</span>
             </div>
-            <div class="assistant-quick-links" id="assistantQuickLinks">
-                <button class="assistant-quick-link is-primary" id="funFactTrigger" type="button">Show a fun fact</button>
-                <button class="assistant-quick-link" type="button" data-prompt="I need help finding U.S. manufacturers for a hardware product.">Find manufacturers</button>
-                <button class="assistant-quick-link" type="button" data-prompt="What supply chain gaps or bottlenecks stand out in this directory?">Show sourcing gaps</button>
-                <button class="assistant-quick-link" type="button" data-prompt="Which categories should a hardware founder look at first when sourcing in America?">Explore categories</button>
-                <button class="assistant-quick-link" type="button" data-prompt="Help me source CNC machining, injection molding, or electronics assembly in the U.S.">Popular capabilities</button>
-                <button class="assistant-quick-link" type="button" data-prompt="What are 10 notable manufacturing startups or emerging industrial companies in the U.S.?">Top 10 manufacturing startups</button>
+            <div class="assistant-messages" id="chatMessages">
             </div>
             <div class="fun-fact-card" id="funFactCard" hidden>
                 <p class="fun-fact-kicker">American manufacturing heritage</p>
@@ -119,11 +115,22 @@
             <div class="assistant-results" id="assistantResults"></div>
         </div>
 
+        <div class="assistant-bottom-tools">
+            <div class="assistant-quick-links" id="assistantQuickLinks">
+                <button class="assistant-quick-link is-primary" id="funFactTrigger" type="button">Show a fun fact</button>
+                <button class="assistant-quick-link" type="button" data-prompt="I need help finding U.S. manufacturers for a hardware product.">Find manufacturers</button>
+                <button class="assistant-quick-link" type="button" data-prompt="What supply chain gaps or bottlenecks stand out in this directory?">Show sourcing gaps</button>
+                <button class="assistant-quick-link" type="button" data-prompt="Which categories should a hardware founder look at first when sourcing in America?">Explore categories</button>
+                <button class="assistant-quick-link" type="button" data-prompt="Help me source CNC machining, injection molding, or electronics assembly in the U.S.">Popular capabilities</button>
+                <button class="assistant-quick-link" type="button" data-prompt="What are 10 notable manufacturing startups or emerging industrial companies in the U.S.?">Top 10 manufacturing startups</button>
+            </div>
+        </div>
+
         <div class="assistant-input">
             <textarea id="chatInput" placeholder="Ask for manufacturers or describe what you're looking for." rows="4"></textarea>
             <div class="assistant-actions">
-                <p class="assistant-hint">Press Enter to send. Shift+Enter for a new line.</p>
-                <button id="chatSend">Send</button>
+                <p class="assistant-hint">Press Enter to chat.</p>
+                <button id="chatSend">Chat</button>
             </div>
         </div>
     </aside>

@@ -7,7 +7,16 @@ const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = __dirname;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1';
+const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || '';
+const FUN_FACTS_CACHE_PATH = path.join(ROOT, 'fun-facts-cache.json');
+const DEFAULT_FUN_FACTS = [
+    'The Springfield Armory helped pioneer interchangeable parts manufacturing in the U.S. during the 1800s.',
+    'By 1913, Ford cut Model T assembly time to about 93 minutes, redefining industrial scale.',
+    'WWII factory conversion helped U.S. industry build ships, aircraft, and vehicles at historic speed.',
+    'American machine tool makers enabled precision production across aerospace, auto, and defense.',
+    'Containerization and logistics innovation helped U.S. manufacturers ship faster and cheaper worldwide.'
+];
 
 const MIME_TYPES = {
     '.css': 'text/css; charset=utf-8',
@@ -24,6 +33,8 @@ const MIME_TYPES = {
 
 const workspaceFiles = buildWorkspaceFileManifest();
 const manufacturers = loadManufacturers();
+let funFactsCache = loadFunFactsCache();
+let funFactCursor = 0;
 
 const server = http.createServer(async (req, res) => {
     try {
@@ -36,7 +47,10 @@ const server = http.createServer(async (req, res) => {
             await handleChatRequest(req, res);
             return;
         }
-
+        if (req.method === 'POST' && req.url === '/api/fun-fact') {
+            await handleFunFactRequest(req, res);
+            return;
+        }
         if (req.method === 'GET') {
             await serveStaticFile(req, res);
             return;
@@ -60,6 +74,12 @@ async function handleChatRequest(req, res) {
         });
         return;
     }
+    if (!VECTOR_STORE_ID) {
+        sendJson(res, 500, {
+            error: 'Missing VECTOR_STORE_ID. Add it to your environment before using vector search.'
+        });
+        return;
+    }
 
     const body = await readJsonBody(req);
     const userMessage = String(body.message || '').trim();
@@ -72,51 +92,112 @@ async function handleChatRequest(req, res) {
     const visibleManufacturers = Array.isArray(body.visibleManufacturers) ? body.visibleManufacturers : [];
     const uiState = body.uiState || {};
     const context = buildAssistantContext(userMessage, visibleManufacturers, uiState);
+    const candidatePool = visibleManufacturers.length ? visibleManufacturers : manufacturers;
+    const candidateBriefs = candidatePool.slice(0, 100).map(item => ({
+        name: item.name || '',
+        category: item.category || '',
+        industry: item.industry || '',
+        location: item.location || '',
+        products: Array.isArray(item.products) ? item.products.slice(0, 8) : [],
+        description: item.description || ''
+    }));
 
-    const response = await fetch('https://api.openai.com/v1/responses', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            model: OPENAI_MODEL,
-            previous_response_id: body.previousResponseId || undefined,
-            input: [
-                {
-                    role: 'developer',
-                    content: [
-                        {
-                            type: 'input_text',
-                            text: [
-                                'You are the American Supply Chain directory assistant.',
-                                'Answer using the provided workspace metadata and manufacturer context.',
-                                'Be concrete and concise.',
-                                'If the user asks for suppliers, recommend only companies that appear in the supplied context.',
-                                'If evidence is incomplete, say that directly and explain what is missing.',
-                                'Prefer bullet points when listing companies.',
-                                'When helpful, mention category, industry, location, and why the match is relevant.'
-                            ].join(' ')
-                        }
-                    ]
-                },
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'input_text',
-                            text: JSON.stringify({
-                                user_query: userMessage,
-                                ui_state: uiState,
-                                workspace_files: workspaceFiles,
-                                context
-                            })
-                        }
-                    ]
-                }
-            ]
-        })
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45_000);
+    let response;
+    try {
+        response = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+                model: OPENAI_MODEL,
+                previous_response_id: body.previousResponseId || undefined,
+                tools: [
+                    {
+                        type: 'file_search',
+                        vector_store_ids: [VECTOR_STORE_ID],
+                        max_num_results: 12
+                    }
+                ],
+                include: ['file_search_call.results'],
+                input: [
+                    {
+                        role: 'developer',
+                        content: [
+                            {
+                                type: 'input_text',
+                                text: [
+                                    'You are the American Supply Chain Directory Assistant.',
+                                    'Use file_search results and the provided candidate list.',
+                                    'Return strict JSON only.',
+                                    'Schema:',
+                                    '{"mode":"clarify|recommend","answer":"string","follow_up_questions":["string"],"top_matches":[{"name":"string","reason":"string"}]}',
+                                    'Core Behavior:',
+                                    '* Be direct. No fluff. No filler.',
+                                    '* If the question is generic, give a generic, concise answer immediately.',
+                                    '* If the question is specific but missing key details, enter clarify mode.',
+                                    '* If enough detail exists, enter recommend mode.',
+                                    'Clarify Mode Rules:',
+                                    '* Set "mode": "clarify"',
+                                    '* Ask exactly one sharp, targeted question',
+                                    '* No extra text. No explanations.',
+                                    '* "answer" must contain only that question',
+                                    '* "follow_up_questions" must contain that same question',
+                                    '* "top_matches" must be empty',
+                                    'Recommend Mode Rules:',
+                                    '* Set "mode": "recommend"',
+                                    '* Provide 3-5 matches max',
+                                    '* Only use candidates from the provided list',
+                                    '* Each match must include a clear, specific reason',
+                                    '* If evidence is weak or incomplete, state that directly',
+                                    '* Keep "answer" under 200 characters',
+                                    'Direct Answer Rules (No Clarify Needed):',
+                                    '* If the user asks:',
+                                    '  * aggregate questions ("how many", "count")',
+                                    '  * strategy questions ("where to start", "priorities")',
+                                    '    -> answer directly, no clarification',
+                                    'Tone Constraints:',
+                                    '* Minimal, factual, surgical',
+                                    '* No politeness padding',
+                                    '* No assumptions beyond available data'
+                                ].join(' ')
+                            }
+                        ]
+                    },
+                    {
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'input_text',
+                                text: JSON.stringify({
+                                    user_query: userMessage,
+                                    ui_state: uiState,
+                                    workspace_files: workspaceFiles,
+                                    context,
+                                    candidates: candidateBriefs
+                                })
+                            }
+                        ]
+                    }
+                ]
+            })
+        });
+    } catch (error) {
+        clearTimeout(timeout);
+        const isTimeout = error && error.name === 'AbortError';
+        sendJson(res, 504, {
+            error: isTimeout
+                ? 'Assistant timed out while searching. Try a shorter request or resend.'
+                : 'Network error while contacting OpenAI.'
+        });
+        return;
+    } finally {
+        clearTimeout(timeout);
+    }
 
     const payload = await response.json();
     if (!response.ok) {
@@ -127,11 +208,40 @@ async function handleChatRequest(req, res) {
         return;
     }
 
+    const outputText = extractOutputText(payload);
+    const parsed = tryParseAssistantJson(outputText);
+    const forceRecommend = shouldForceRecommendMode(userMessage);
+    const mode = forceRecommend
+        ? 'recommend'
+        : (parsed?.mode === 'clarify' ? 'clarify' : 'recommend');
+    const topMatches = Array.isArray(parsed?.top_matches) ? parsed.top_matches : [];
+    const selectedManufacturers = selectManufacturersByName(
+        candidatePool,
+        topMatches.map(match => match && match.name).filter(Boolean)
+    );
+    const answer = mode === 'clarify'
+        ? formatClarifyResponse(parsed)
+        : (parsed?.answer || outputText);
+    const responseAnswer = mode === 'clarify'
+        ? answer
+        : clampAnswerLength(answer, 200);
+
     sendJson(res, 200, {
-        answer: extractOutputText(payload),
+        answer: responseAnswer,
         responseId: payload.id || null,
         model: payload.model || OPENAI_MODEL,
-        context: context.relevantManufacturers
+        context: mode === 'clarify'
+            ? []
+            : (selectedManufacturers.length ? selectedManufacturers : context.relevantManufacturers.slice(0, 5))
+    });
+}
+
+async function handleFunFactRequest(req, res) {
+    const fact = nextCachedFunFact();
+
+    sendJson(res, 200, {
+        fact,
+        model: 'local-cache'
     });
 }
 
@@ -290,6 +400,179 @@ function extractOutputText(payload) {
     });
 
     return parts.join('\n').trim();
+}
+
+function tryParseAssistantJson(value) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(raw);
+    } catch (error) {
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (!match) {
+            return null;
+        }
+        try {
+            return JSON.parse(match[0]);
+        } catch (secondError) {
+            return null;
+        }
+    }
+}
+
+function normalizeString(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function selectManufacturersByName(pool, names) {
+    const wanted = names
+        .map(normalizeString)
+        .filter(Boolean);
+    if (!wanted.length) {
+        return [];
+    }
+
+    const selected = [];
+    const used = new Set();
+
+    wanted.forEach(target => {
+        const index = pool.findIndex((item, idx) => {
+            if (used.has(idx)) return false;
+            const name = normalizeString(item.name);
+            return name === target || name.includes(target) || target.includes(name);
+        });
+        if (index >= 0) {
+            used.add(index);
+            selected.push(pool[index]);
+        }
+    });
+
+    return selected.slice(0, 3);
+}
+
+function formatClarifyResponse(parsed) {
+    const modelQuestions = Array.isArray(parsed?.follow_up_questions)
+        ? parsed.follow_up_questions
+            .map(item => toQuestionLine(item))
+            .filter(Boolean)
+        : [];
+    const primaryModelQuestion = modelQuestions[0];
+    if (primaryModelQuestion) {
+        return primaryModelQuestion;
+    }
+
+    const answerQuestion = toQuestionLine(parsed?.answer || '');
+    if (answerQuestion) {
+        return answerQuestion;
+    }
+
+    return 'What exact actuator type do you need (linear, rotary, servo, BLDC, or stepper)?';
+}
+
+function toQuestionLine(value) {
+    const text = String(value || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!text) {
+        return '';
+    }
+
+    // Strip common filler intros so we keep only concrete asks.
+    const stripped = text
+        .replace(/^(great|thanks|thank you|to help|before i recommend|i need|could you|please)\b[:,\s-]*/i, '')
+        .trim();
+    const candidate = stripped || text;
+
+    // Only keep lines that are actual questions.
+    if (!candidate.includes('?') && candidate.split(' ').length < 4) {
+        return '';
+    }
+
+    return candidate.endsWith('?') ? candidate : `${candidate}?`;
+}
+
+function clampAnswerLength(value, maxLength) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text || text.length <= maxLength) {
+        return text;
+    }
+    return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+}
+
+function clampFunFact(value) {
+    const text = String(value || '')
+        .replace(/\s+/g, ' ')
+        .replace(/^["'`]+|["'`]+$/g, '')
+        .trim();
+    if (!text) {
+        return '';
+    }
+    if (text.length <= 160) {
+        return text;
+    }
+    return `${text.slice(0, 159).trim()}…`;
+}
+
+function loadFunFactsCache() {
+    try {
+        if (!fs.existsSync(FUN_FACTS_CACHE_PATH)) {
+            return [...DEFAULT_FUN_FACTS];
+        }
+
+        const raw = fs.readFileSync(FUN_FACTS_CACHE_PATH, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+            return [...DEFAULT_FUN_FACTS];
+        }
+
+        const cleaned = parsed
+            .map(item => clampFunFact(item))
+            .filter(Boolean);
+
+        return cleaned.length ? cleaned : [...DEFAULT_FUN_FACTS];
+    } catch (error) {
+        console.error('Failed to load fun facts cache:', error);
+        return [...DEFAULT_FUN_FACTS];
+    }
+}
+
+function nextCachedFunFact() {
+    if (!funFactsCache.length) {
+        funFactsCache = [...DEFAULT_FUN_FACTS];
+        funFactCursor = 0;
+    }
+
+    const fact = funFactsCache[funFactCursor % funFactsCache.length];
+    funFactCursor = (funFactCursor + 1) % Math.max(1, funFactsCache.length);
+
+    return fact;
+}
+
+function shouldForceRecommendMode(message) {
+    const text = String(message || '').toLowerCase();
+    if (!text) {
+        return false;
+    }
+
+    const strategySignals = [
+        'what categories',
+        'which categories',
+        'where should i start',
+        'where do i start',
+        'how should i start',
+        'top priorities',
+        'look at first',
+        'first when sourcing',
+        'in general'
+    ];
+
+    return strategySignals.some(signal => text.includes(signal));
 }
 
 function readJsonBody(req) {
