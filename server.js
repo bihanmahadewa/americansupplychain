@@ -36,7 +36,7 @@ const manufacturers = loadManufacturers();
 let funFactsCache = loadFunFactsCache();
 let funFactCursor = 0;
 
-const server = http.createServer(async (req, res) => {
+const requestHandler = async (req, res) => {
     try {
         if (req.method === 'GET' && req.url.startsWith('/api/slideshow')) {
             sendJson(res, 200, { slides: getSlideshowSlides() });
@@ -61,11 +61,17 @@ const server = http.createServer(async (req, res) => {
         console.error(error);
         sendJson(res, 500, { error: 'Server error.' });
     }
-});
+};
 
-server.listen(PORT, HOST, () => {
-    console.log(`American Supply Chain server running at http://${HOST}:${PORT}`);
-});
+const server = http.createServer(requestHandler);
+
+if (require.main === module) {
+    server.listen(PORT, HOST, () => {
+        console.log(`American Supply Chain server running at http://${HOST}:${PORT}`);
+    });
+}
+
+module.exports = requestHandler;
 
 async function handleChatRequest(req, res) {
     if (!OPENAI_API_KEY) {
