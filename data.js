@@ -126,7 +126,7 @@ const manufacturers = [
         name: "The Anaya Group (American Stalls)",
         twitter: "@yash_balasaria",
         twitterUrl: "https://x.com/yash_balasaria",
-        website: "",
+        website: "https://americanstalls.com/",
         email: "",
         phone: "",
         location: {
@@ -226,7 +226,7 @@ const manufacturers = [
             state: "Michigan",
             zip: ""
         },
-        industry: "Manufacturing Automation",
+        industry: "PLCs / Motion Control",
         products: [
             "Factory automation",
             "Manufacturing software",
@@ -241,7 +241,7 @@ const manufacturers = [
         name: "Oil & Gas Manufacturing",
         twitter: "@MagyarScoundrel",
         twitterUrl: "https://x.com/MagyarScoundrel",
-        website: "",
+        website: "https://www.foundationmfg.com/",
         email: "",
         phone: "",
         location: {
@@ -265,7 +265,7 @@ const manufacturers = [
         name: "Nox Metals",
         twitter: "@noxmetals",
         twitterUrl: "https://x.com/noxmetals",
-        website: "",
+        website: "https://ickler.com/",
         email: "",
         phone: "",
         location: {
@@ -287,7 +287,7 @@ const manufacturers = [
         name: "Digital Metal",
         twitter: "@digitalmetalinc",
         twitterUrl: "https://x.com/digitalmetalinc",
-        website: "",
+        website: "https://www.aerospacewelding.com/",
         email: "",
         phone: "",
         location: {
@@ -310,7 +310,7 @@ const manufacturers = [
         name: "Foundation Manufacturing",
         twitter: "@FoundationManf",
         twitterUrl: "https://x.com/FoundationManf",
-        website: "",
+        website: "https://www.technoxmachine.com/",
         email: "",
         phone: "",
         location: {
@@ -1051,6 +1051,245 @@ const manufacturers = [
         ],
         description: "Rare earth producer headquartered in Las Vegas with mining and processing at Mountain Pass, California and downstream magnet manufacturing in Texas.",
         founded: 2017,
+        employees: ""
+    },
+    {
+        id: 273,
+        name: "USA Rare Earth",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://usare.com/",
+        email: "",
+        phone: "",
+        location: {
+            city: "Stillwater",
+            state: "Oklahoma",
+            zip: ""
+        },
+        industry: "Rare Earth Mining",
+        products: [
+            "Rare earth feedstock",
+            "Separated rare earths",
+            "Magnet supply chain development"
+        ],
+        description: "Rare earth developer advancing the Round Top project in Texas alongside a domestic separation and magnet supply chain buildout, with pilot-scale activity and Department of Defense support in place.",
+        founded: null,
+        employees: ""
+    },
+    {
+        id: 274,
+        name: "Rare Element Resources",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.rareelementresources.com/",
+        email: "",
+        phone: "",
+        location: {
+            city: "Littleton",
+            state: "Colorado",
+            zip: ""
+        },
+        industry: "Rare Earth Mining",
+        products: [
+            "Bear Lodge rare earth feedstock",
+            "Separated NdPr oxide",
+            "Rare earth separation technology"
+        ],
+        description: "Rare earth company advancing the Bear Lodge project in Wyoming and the Upton demonstration processing and separation plant, with commissioning targeted and permitting work continuing.",
+        founded: null,
+        employees: ""
+    },
+    {
+        id: 275,
+        name: "Ucore Rare Metals",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://ucore.com/",
+        email: "",
+        phone: "",
+        location: {
+            city: "Alexandria",
+            state: "Louisiana",
+            zip: ""
+        },
+        industry: "Rare Earth Mining",
+        products: [
+            "RapidSX rare earth separation",
+            "Separated rare earth oxides",
+            "Strategic metals processing"
+        ],
+        description: "Rare earth processing company commercializing RapidSX separation in Alexandria, Louisiana while continuing longer-term development of the Bokan project in Alaska.",
+        founded: null,
+        employees: ""
+    },
+    {
+        id: 276,
+        name: "American Rare Earths",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.americanree.com/",
+        email: "",
+        phone: "",
+        location: {
+            city: "Laramie",
+            state: "Wyoming",
+            zip: ""
+        },
+        industry: "Rare Earth Mining",
+        products: [
+            "Halleck Creek rare earth resource",
+            "Cowboy State Mine development",
+            "Rare earth processing development"
+        ],
+        description: "Rare earth developer advancing Halleck Creek in Wyoming, including the Cowboy State Mine phase and supporting processing work in the state.",
+        founded: null,
+        employees: ""
+    },
+    {
+        id: 277,
+        name: "Aerotech",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.aerotech.com/",
+        email: "",
+        phone: "+1-412-963-7470",
+        location: {
+            city: "Pittsburgh",
+            state: "Pennsylvania",
+            zip: "15238"
+        },
+        industry: "PLCs / Motion Control",
+        products: [
+            "Precision stages",
+            "Motion controllers",
+            "Actuators",
+            "Positioning systems"
+        ],
+        description: "Pittsburgh motion-control company building high-precision stages, actuators, and controllers for demanding automation, metrology, photonics, and alignment applications.",
+        founded: null,
+        employees: ""
+    },
+    {
+        id: 278,
+        name: "ADVANCED Motion Controls",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.a-m-c.com/",
+        email: "",
+        phone: "(805) 389-1935",
+        location: {
+            city: "Camarillo",
+            state: "California",
+            zip: "93012"
+        },
+        industry: "PLCs / Motion Control",
+        products: [
+            "Servo drives",
+            "Servo amplifiers",
+            "Motor controllers",
+            "Motion control systems"
+        ],
+        description: "Camarillo-based manufacturer of servo drives and motor controllers used in robotics and industrial automation systems.",
+        founded: 1987,
+        employees: ""
+    },
+    {
+        id: 279,
+        name: "Kollmorgen",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.kollmorgen.com/en-us",
+        email: "",
+        phone: "",
+        location: {
+            city: "Radford",
+            state: "Virginia",
+            zip: ""
+        },
+        industry: "PLCs / Motion Control",
+        products: [
+            "Servo motors",
+            "Stepper motors",
+            "Drives",
+            "Automation controllers",
+            "AGV control systems"
+        ],
+        description: "Motion supplier serving machine builders and robotics teams with motors, drives, automation platforms, and vehicle control systems.",
+        founded: null,
+        employees: ""
+    },
+    {
+        id: 280,
+        name: "Applied Motion Products",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.applied-motion.com",
+        email: "",
+        phone: "(831) 761-6555",
+        location: {
+            city: "Watsonville",
+            state: "California",
+            zip: "95076"
+        },
+        industry: "PLCs / Motion Control",
+        products: [
+            "Stepper motors",
+            "Servo motors",
+            "Drives",
+            "Controllers",
+            "Gearheads"
+        ],
+        description: "Watsonville motion-control manufacturer focused on stepper and servo motors, drives, and controllers for OEM and industrial applications.",
+        founded: 1978,
+        employees: ""
+    },
+    {
+        id: 281,
+        name: "Allied Motion",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.alliedmotion.com/",
+        email: "",
+        phone: "+1 (716) 242-7535",
+        location: {
+            city: "Amherst",
+            state: "New York",
+            zip: ""
+        },
+        industry: "PLCs / Motion Control",
+        products: [
+            "Brushless motors",
+            "Servo motors",
+            "Motion controllers",
+            "Drives",
+            "Encoders"
+        ],
+        description: "Amherst-based motion company supplying motors, drives, controllers, and encoders for automation, robotics, medical, and vehicle systems.",
+        founded: 1962,
+        employees: ""
+    },
+    {
+        id: 282,
+        name: "Moog Inc.",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.moog.com/",
+        email: "",
+        phone: "+1 (716) 652-2000",
+        location: {
+            city: "Elma",
+            state: "New York",
+            zip: "14059"
+        },
+        industry: "PLCs / Motion Control",
+        products: [
+            "Electrohydraulic actuators",
+            "Electric motion systems",
+            "Servo valves",
+            "Industrial motion control systems"
+        ],
+        description: "Elma-based motion-control manufacturer building electric, hydraulic, and electrohydraulic systems for industrial automation and other high-performance applications.",
+        founded: 1951,
         employees: ""
     },
     {
@@ -4354,7 +4593,7 @@ const manufacturers = [
         name: "Ickler Company Inc.",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://perrywelding.com/",
         email: "",
         phone: "",
         location: {
@@ -4376,7 +4615,7 @@ const manufacturers = [
         name: "Lynn Welding Co., Inc.",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://www.mccormicksmetrology.com/",
         email: "",
         phone: "",
         location: {
@@ -4400,7 +4639,7 @@ const manufacturers = [
         name: "Technox Machine & Manufacturing Inc.",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://www.prattandwhitney.com/",
         email: "",
         phone: "",
         location: {
@@ -4424,7 +4663,7 @@ const manufacturers = [
         name: "Perry Welding and Machine",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://usindt.com/",
         email: "",
         phone: "",
         location: {
@@ -4944,7 +5183,7 @@ const manufacturers = [
         name: "McCormick's Metrology",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://aegeusinspections.com/",
         email: "",
         phone: "",
         location: { city: "", state: "", zip: "" },
@@ -4989,7 +5228,7 @@ const manufacturers = [
         name: "Pratt & Whitney Measurement Systems",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://qualitysupportgroup.com/",
         email: "",
         phone: "",
         location: { city: "", state: "", zip: "" },
@@ -5019,7 +5258,7 @@ const manufacturers = [
         name: "U.S. Inspection & NDT",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://productivityteam.com/",
         email: "",
         phone: "",
         location: { city: "", state: "", zip: "" },
@@ -5049,7 +5288,7 @@ const manufacturers = [
         name: "Aegeus Inspection Solutions",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://www.americancleanrooms.com/",
         email: "",
         phone: "",
         location: { city: "", state: "", zip: "" },
@@ -5124,7 +5363,7 @@ const manufacturers = [
         name: "QSG (Quality Support Group)",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://csitesting.com/",
         email: "",
         phone: "",
         location: { city: "", state: "", zip: "" },
@@ -5139,7 +5378,7 @@ const manufacturers = [
         name: "The Productivity Team",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://www.cleanroomcertification.com/",
         email: "",
         phone: "",
         location: { city: "", state: "", zip: "" },
@@ -5199,7 +5438,7 @@ const manufacturers = [
         name: "American Cleanroom Systems",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://www.ceproinc.com/",
         email: "",
         phone: "",
         location: { city: "", state: "", zip: "" },
@@ -5214,7 +5453,7 @@ const manufacturers = [
         name: "CSI Testing",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://kpak.com/",
         email: "",
         phone: "",
         location: { city: "", state: "", zip: "" },
@@ -5259,7 +5498,7 @@ const manufacturers = [
         name: "C.E.R.T.S.",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://www.cleanroomcertification.com/",
         email: "",
         phone: "",
         location: { city: "", state: "", zip: "" },
@@ -5274,7 +5513,7 @@ const manufacturers = [
         name: "CEPro",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://www.ceproinc.com/",
         email: "",
         phone: "",
         location: { city: "", state: "", zip: "" },
@@ -5604,7 +5843,7 @@ const manufacturers = [
         name: "KPAK",
         twitter: "",
         twitterUrl: "",
-        website: "",
+        website: "https://kpak.com/",
         email: "",
         phone: "",
         location: { city: "", state: "", zip: "" },
@@ -5781,6 +6020,53 @@ const manufacturers = [
     },
     // Add your X.com manufacturer profiles here following this format
 ];
+
+const ycManufacturingRoboticsCompanies = [
+    {"id": 30991, "name": "Forge Robotics", "twitter": "", "twitterUrl": "", "website": "https://forge-robotics.com", "email": "", "phone": "", "location": {"city": "San Francisco", "state": "California", "zip": ""}, "industry": "Welding / Brazing", "products": ["Robotic welding for metal fabrication"], "description": "YC-backed robotics company focused on welding and metal fabrication workflows.", "founded": null, "employees": "1", "ycCompany": true, "ycBatch": "Fall 2025"},
+    {"id": 30895, "name": "Allus AI", "twitter": "", "twitterUrl": "", "website": "https://allus.ai", "email": "", "phone": "", "location": {"city": "Atlanta", "state": "Georgia", "zip": ""}, "industry": "Manufacturing Automation", "products": ["Manufacturing vision systems", "Factory inspection automation"], "description": "YC-backed manufacturing vision company building automation tools for factory operations.", "founded": null, "employees": "3", "ycCompany": true, "ycBatch": "Fall 2025"},
+    {"id": 30904, "name": "Tensr", "twitter": "", "twitterUrl": "", "website": "https://tensr.com/", "email": "", "phone": "", "location": {"city": "San Francisco", "state": "California", "zip": ""}, "industry": "Manufacturing Automation", "products": ["Autonomous robotic factories", "Automated manufacturing cells"], "description": "YC-backed startup building autonomous robotic factory systems.", "founded": null, "employees": "3", "ycCompany": true, "ycBatch": "Fall 2025"},
+    {"id": 30818, "name": "Nox Metals", "twitter": "", "twitterUrl": "", "website": "https://noxmetals.co/", "email": "", "phone": "", "location": {"city": "Detroit", "state": "Michigan", "zip": ""}, "industry": "Metal Manufacturing", "products": ["Industrial metal supply"], "description": "YC-backed company supplying industrial metals for the domestic manufacturing base.", "founded": null, "employees": "11", "ycCompany": true, "ycBatch": "Summer 2025"},
+    {"id": 30781, "name": "Duranium", "twitter": "", "twitterUrl": "", "website": "https://www.duranium.co/", "email": "", "phone": "", "location": {"city": "Alameda", "state": "California", "zip": ""}, "industry": "Metal Manufacturing", "products": ["Critical metals production"], "description": "YC-backed company reshoring critical metal production in the United States.", "founded": null, "employees": "4", "ycCompany": true, "ycBatch": "Summer 2025"},
+    {"id": 29804, "name": "Inversion Semiconductor", "twitter": "", "twitterUrl": "", "website": "https://www.inversionsemi.com/", "email": "", "phone": "", "location": {"city": "San Francisco", "state": "California", "zip": ""}, "industry": "Semiconductor Fab", "products": ["Chip manufacturing"], "description": "YC-backed semiconductor company focused on faster chip manufacturing.", "founded": null, "employees": "6", "ycCompany": true, "ycBatch": "Winter 2025"},
+    {"id": 17878, "name": "Industrial Next", "twitter": "", "twitterUrl": "", "website": "https://industrialnext.ai", "email": "", "phone": "", "location": {"city": "San Francisco", "state": "California", "zip": ""}, "industry": "Manufacturing Automation", "products": ["Autonomous factory automation"], "description": "YC-backed industrial automation company focused on autonomous manufacturing systems.", "founded": null, "employees": "3", "ycCompany": true, "ycBatch": "Winter 2022"},
+    {"id": 14554, "name": "RMFG", "twitter": "", "twitterUrl": "", "website": "https://www.rmfgen.com/", "email": "", "phone": "", "location": {"city": "Fort Worth", "state": "Texas", "zip": ""}, "industry": "Digital Manufacturing", "products": ["Contract manufacturing"], "description": "YC-backed contract manufacturer serving fast-moving hardware companies.", "founded": null, "employees": "25", "ycCompany": true, "ycBatch": "Summer 2021"},
+    {"id": 6832, "name": "JITX", "twitter": "", "twitterUrl": "", "website": "https://jitx.com", "email": "", "phone": "", "location": {"city": "Berkeley", "state": "California", "zip": ""}, "industry": "Electronics", "products": ["PCB design automation"], "description": "YC-backed electronics company automating circuit board design.", "founded": null, "employees": "12", "ycCompany": true, "ycBatch": "Summer 2018"},
+    {"id": 1690, "name": "Overview", "twitter": "", "twitterUrl": "", "website": "https://overview.ai", "email": "", "phone": "", "location": {"city": "San Francisco", "state": "California", "zip": ""}, "industry": "Manufacturing Software", "products": ["Industrial quality inspection software"], "description": "YC-backed software company for industrial quality inspection and defect detection.", "founded": null, "employees": "60", "ycCompany": true, "ycBatch": "Winter 2019"},
+    {"id": 447, "name": "Octopart", "twitter": "", "twitterUrl": "", "website": "http://octopart.com", "email": "", "phone": "", "location": {"city": "New York", "state": "New York", "zip": ""}, "industry": "Electronics", "products": ["Electronic component search"], "description": "YC-backed search platform for electronic components and parts sourcing.", "founded": null, "employees": "11", "ycCompany": true, "ycBatch": "Winter 2007"},
+    {"id": 1537, "name": "Rain Neuromorphics", "twitter": "", "twitterUrl": "", "website": "https://rain.ai", "email": "", "phone": "", "location": {"city": "Redwood City", "state": "California", "zip": ""}, "industry": "Semiconductor Fab", "products": ["AI processors"], "description": "YC-backed semiconductor company building neuromorphic AI processors.", "founded": null, "employees": "57", "ycCompany": true, "ycBatch": "Summer 2018"},
+    {"id": 810, "name": "Reduced Energy Microsystems", "twitter": "", "twitterUrl": "", "website": "http://www.reducedenergymicrosystems.com", "email": "", "phone": "", "location": {"city": "San Francisco", "state": "California", "zip": ""}, "industry": "Semiconductor Fab", "products": ["Low-power silicon"], "description": "YC-backed semiconductor company building low-power silicon for embedded AI.", "founded": null, "employees": "11", "ycCompany": true, "ycBatch": "Summer 2015"},
+    {"id": 601, "name": "MadeSolid", "twitter": "", "twitterUrl": "", "website": "http://madesolid.com", "email": "", "phone": "", "location": {"city": "Emeryville", "state": "California", "zip": ""}, "industry": "3D Printing Materials", "products": ["Functional 3D printing materials"], "description": "YC-backed materials company focused on functional materials for 3D printing.", "founded": null, "employees": "2", "ycCompany": true, "ycBatch": "Winter 2014"},
+    {"id": 1538, "name": "Voodoo Manufacturing", "twitter": "", "twitterUrl": "", "website": "http://www.voodoomfg.com", "email": "", "phone": "", "location": {"city": "New York", "state": "New York", "zip": ""}, "industry": "Digital Manufacturing", "products": ["On-demand manufacturing"], "description": "YC-backed digital manufacturer offering on-demand production capacity.", "founded": null, "employees": "19", "ycCompany": true, "ycBatch": "Winter 2017"},
+    {"id": 13214, "name": "Pashi", "twitter": "", "twitterUrl": "", "website": "https://pashi.com", "email": "", "phone": "", "location": {"city": "San Francisco", "state": "California", "zip": ""}, "industry": "Manufacturing Software", "products": ["Production line software"], "description": "YC-backed software company for operating and optimizing production lines.", "founded": null, "employees": "3", "ycCompany": true, "ycBatch": "Winter 2020"},
+    {"id": 12865, "name": "Blockstamp", "twitter": "", "twitterUrl": "", "website": "https://www.blockstampsf.com/", "email": "", "phone": "", "location": {"city": "Los Angeles", "state": "California", "zip": ""}, "industry": "Manufacturing Software", "products": ["Industrial asset management software"], "description": "YC-backed software for industrial equipment and asset management.", "founded": null, "employees": "2", "ycCompany": true, "ycBatch": "Summer 2019"}
+];
+
+const manufacturersByName = new Map(manufacturers.map(manufacturer => [
+    manufacturer.name.toLowerCase(),
+    manufacturer
+]));
+
+ycManufacturingRoboticsCompanies.forEach(company => {
+    const key = company.name.toLowerCase();
+    const existing = manufacturersByName.get(key);
+
+    if (existing) {
+        manufacturersByName.set(key, {
+            ...existing,
+            ...company,
+            products: company.products && company.products.length ? company.products : existing.products,
+            description: company.description || existing.description,
+            website: company.website || existing.website,
+            location: company.location.city && company.location.state ? company.location : existing.location
+        });
+        return;
+    }
+
+    manufacturersByName.set(key, company);
+});
+
+manufacturers.length = 0;
+manufacturers.push(...manufacturersByName.values());
 
 // Extract unique states and industries for filters
 function getUniqueStates() {

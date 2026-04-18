@@ -19,6 +19,18 @@ const funFactTrigger = document.getElementById('funFactTrigger');
 const funFactCard = document.getElementById('funFactCard');
 const funFactText = document.getElementById('funFactText');
 
+const visibleIndustryAliases = {
+    'Alloy Development': 'Alloy development',
+    'Specialty Alloys': 'Alloy development',
+    'CNC Machining': 'CNC machining',
+    'Foundry / Casting': 'Metal casting / foundry',
+    'Injection Molding': 'Injection molding',
+    'Metal Manufacturing': 'Smelting / primary metals',
+    'PLCs / Motion Control': 'PLCs / motion control',
+    'Precision Manufacturing': 'CNC machining',
+    'Stamping / Deep Draw': 'Stamping / deep draw'
+};
+
 const tierTaxonomy = [
     {
         tier: 'S',
@@ -545,7 +557,7 @@ const tierTaxonomy = [
                     },
                     {
                         name: 'PLCs / motion control',
-                        industryMatches: ['Manufacturing Automation'],
+                        industryMatches: ['Manufacturing Automation', 'PLCs / Motion Control'],
                         keywordMatches: ['plcs', 'motion control']
                     },
                     {
@@ -561,7 +573,7 @@ const tierTaxonomy = [
 
 const taxonomyIndex = flattenTaxonomy(tierTaxonomy);
 const expandedSubcategories = new Set();
-const manufacturerAssignments = buildManufacturerAssignmentLookup();
+let manufacturerAssignments = buildManufacturerAssignmentLookup();
 
 let filteredManufacturers = [...manufacturers];
 let currentView = 'tree';
@@ -780,12 +792,88 @@ const allUSStates = [
     'Wyoming'
 ];
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    normalizeManufacturerIndustries(manufacturers);
+    await loadIqsCompanies();
     populateFilters();
     renderManufacturers(manufacturers);
     initializeFunFacts();
     attachEventListeners();
 });
+
+async function loadIqsCompanies() {
+    if (Array.isArray(window.__iqsCompaniesData) && window.__iqsCompaniesData.length > 0) {
+        mergeImportedManufacturers(window.__iqsCompaniesData);
+        return;
+    }
+
+    try {
+        const response = await fetch('iqs-companies.json?v=20260418-1', { cache: 'no-store' });
+        if (!response.ok) {
+            return;
+        }
+
+        const records = await response.json();
+        mergeImportedManufacturers(records);
+    } catch (error) {
+        console.warn('Unable to load IQS company imports.', error);
+    }
+}
+
+function mergeImportedManufacturers(importedManufacturers) {
+    normalizeManufacturerIndustries(importedManufacturers);
+
+    const existingKeys = new Set(manufacturers.map((manufacturer) => (
+        `${normalizeImportKey(manufacturer.name)}|${manufacturer.industry}`
+    )));
+    let didAddManufacturer = false;
+
+    importedManufacturers.forEach((manufacturer) => {
+        const key = `${normalizeImportKey(manufacturer.name)}|${manufacturer.industry}`;
+        if (!existingKeys.has(key)) {
+            manufacturers.push(manufacturer);
+            existingKeys.add(key);
+            didAddManufacturer = true;
+        }
+    });
+
+    if (didAddManufacturer) {
+        manufacturerAssignments = buildManufacturerAssignmentLookup();
+    }
+}
+
+function normalizeImportKey(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/&/g, ' and ')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .split(' ')
+        .filter(Boolean)
+        .filter(token => ![
+            'inc',
+            'incorporated',
+            'llc',
+            'corp',
+            'corporation',
+            'co',
+            'company',
+            'ltd',
+            'limited',
+            'plc',
+            'holdings',
+            'technologies'
+        ].includes(token))
+        .join(' ');
+}
+
+function normalizeManufacturerIndustries(records) {
+    records.forEach((manufacturer) => {
+        const normalizedIndustry = visibleIndustryAliases[manufacturer.industry];
+        if (normalizedIndustry) {
+            manufacturer.industry = normalizedIndustry;
+        }
+    });
+}
 
 function flattenTaxonomy(tiers) {
     const flat = [];
@@ -971,8 +1059,10 @@ function renderSubcategoryMarkup(subcategory) {
         `;
     }
 
+    const serializedManufacturers = encodeURIComponent(JSON.stringify(subcategory.manufacturers));
+
     return `
-        <div class="subcategory-card has-data" data-subcategory-key="${escapeHtml(subcategory.key)}" data-manufacturers='${JSON.stringify(subcategory.manufacturers)}'>
+        <div class="subcategory-card has-data" data-subcategory-key="${escapeHtml(subcategory.key)}" data-manufacturers="${escapeAttribute(serializedManufacturers)}">
             <div class="subcategory-summary">
                 <span class="subcategory-name">${escapeHtml(subcategory.name)}</span>
                 <span class="subcategory-badge">${subcategory.manufacturers.length}</span>
@@ -984,12 +1074,15 @@ function renderSubcategoryMarkup(subcategory) {
 function renderManufacturerMarkup(manufacturer) {
     const location = formatLocation(manufacturer.location);
     const links = [
-        manufacturer.website ? `<a href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">site</a>` : '',
+        manufacturer.website
+            ? `<a href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">${escapeHtml(formatWebsiteLabel(manufacturer.website))}</a>`
+            : '<span class="manufacturer-link-muted">no website found</span>',
         manufacturer.twitter && manufacturer.twitterUrl
             ? `<a href="${escapeAttribute(manufacturer.twitterUrl)}" target="_blank" rel="noopener">${escapeHtml(manufacturer.twitter)}</a>`
             : '',
         manufacturer.email ? `<a href="mailto:${escapeAttribute(manufacturer.email)}">email</a>` : ''
     ].filter(Boolean).join(' | ');
+    const badges = renderManufacturerBadges(manufacturer);
 
     return `
         <li class="manufacturer-item">
@@ -997,13 +1090,88 @@ function renderManufacturerMarkup(manufacturer) {
                 ${manufacturer.website
                     ? `<a class="manufacturer-name" href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">${escapeHtml(manufacturer.name)}</a>`
                     : `<span class="manufacturer-name">${escapeHtml(manufacturer.name)}</span>`}
+                ${badges}
                 <span class="manufacturer-location">${escapeHtml(location)}</span>
             </div>
             <p class="manufacturer-description">${escapeHtml(manufacturer.description)}</p>
             <p class="manufacturer-products">${escapeHtml(manufacturer.products.join(', '))}</p>
-            ${links ? `<p class="manufacturer-links">${links}</p>` : ''}
+            <p class="manufacturer-links">${links}</p>
         </li>
     `;
+}
+
+function renderManufacturerBadges(manufacturer) {
+    const foundedLabel = formatEstablishedLabel(manufacturer.founded);
+    const isEdmImport = manufacturer.source === 'IQS' && manufacturer.sourceCategory === 'EDM';
+
+    if (!manufacturer.ycCompany && !manufacturer.ycBatch && !foundedLabel && !isEdmImport) {
+        return '';
+    }
+
+    const badges = [];
+
+    if (manufacturer.ycCompany) {
+        badges.push('<span class="manufacturer-chip">YC</span>');
+    }
+
+    if (manufacturer.ycBatch) {
+        badges.push(`<span class="manufacturer-chip manufacturer-chip-secondary">${escapeHtml(shortenYcBatch(manufacturer.ycBatch))}</span>`);
+    }
+
+    if (isEdmImport) {
+        badges.push('<span class="manufacturer-chip manufacturer-chip-source">EDM</span>');
+    }
+
+    if (foundedLabel) {
+        badges.push(`<span class="manufacturer-chip manufacturer-chip-secondary">${escapeHtml(foundedLabel)}</span>`);
+    }
+
+    return `<div class="manufacturer-chips">${badges.join('')}</div>`;
+}
+
+function formatWebsiteLabel(website) {
+    if (!website) {
+        return '';
+    }
+
+    try {
+        const hostname = new URL(website).hostname.toLowerCase();
+        return hostname.replace(/^www\./, '');
+    } catch (error) {
+        return String(website)
+            .replace(/^https?:\/\//i, '')
+            .replace(/^www\./i, '')
+            .replace(/\/.*$/, '');
+    }
+}
+
+function formatEstablishedLabel(founded) {
+    if (founded === null || founded === undefined || founded === '') {
+        return '';
+    }
+
+    const foundedString = String(founded).trim();
+    if (!/^\d{4}$/.test(foundedString)) {
+        return '';
+    }
+
+    return `Established ${foundedString}`;
+}
+
+function shortenYcBatch(batch) {
+    const match = String(batch || '').match(/^(Spring|Summer|Fall|Winter)\s+(\d{4})$/i);
+    if (!match) {
+        return String(batch || '');
+    }
+
+    const seasonMap = {
+        spring: 'Sp',
+        summer: 'Su',
+        fall: 'F',
+        winter: 'W'
+    };
+
+    return `${seasonMap[match[1].toLowerCase()] || match[1]}${match[2]}`;
 }
 
 function updateResultsSummary(boardData, visibleCount) {
@@ -1024,7 +1192,7 @@ function attachBoardEventListeners() {
         card.addEventListener('click', () => {
             const section = card.closest('.section-board');
             const contentArea = section.querySelector('.section-content-area');
-            const manufacturers = JSON.parse(card.getAttribute('data-manufacturers'));
+            const manufacturers = JSON.parse(decodeURIComponent(card.getAttribute('data-manufacturers') || '[]'));
 
             // If clicking the same card that's already active, close it
             if (card.classList.contains('active')) {
