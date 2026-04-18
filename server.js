@@ -38,19 +38,27 @@ let funFactCursor = 0;
 
 const requestHandler = async (req, res) => {
     try {
-        if (req.method === 'GET' && req.url.startsWith('/api/slideshow')) {
+        const pathname = normalizePathname(req.url);
+
+        if (req.method === 'GET' && (pathname === '/api/slideshow' || pathname === '/slideshow')) {
             sendJson(res, 200, { slides: getSlideshowSlides() });
             return;
         }
 
-        if (req.method === 'POST' && req.url === '/api/chat') {
+        if (req.method === 'POST' && (pathname === '/api/chat' || pathname === '/chat')) {
             await handleChatRequest(req, res);
             return;
         }
-        if (req.method === 'POST' && req.url === '/api/fun-fact') {
+        if (req.method === 'POST' && (pathname === '/api/fun-fact' || pathname === '/fun-fact')) {
             await handleFunFactRequest(req, res);
             return;
         }
+
+        if (pathname.startsWith('/api/') || pathname === '/api' || pathname === '/chat' || pathname === '/fun-fact') {
+            sendJson(res, 404, { error: 'API route not found.' });
+            return;
+        }
+
         if (req.method === 'GET') {
             await serveStaticFile(req, res);
             return;
@@ -240,6 +248,15 @@ async function handleChatRequest(req, res) {
             ? []
             : (selectedManufacturers.length ? selectedManufacturers : context.relevantManufacturers.slice(0, 5))
     });
+}
+
+function normalizePathname(urlValue) {
+    const parsed = new URL(urlValue || '/', 'http://localhost');
+    const pathname = parsed.pathname || '/';
+    if (pathname.length > 1 && pathname.endsWith('/')) {
+        return pathname.slice(0, -1);
+    }
+    return pathname;
 }
 
 async function handleFunFactRequest(req, res) {
