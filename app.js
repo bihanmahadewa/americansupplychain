@@ -1132,7 +1132,16 @@ async function sendAssistantPrompt(message) {
     appendChatMessage('user', escapeHtml(trimmedMessage));
     chatInput.value = '';
 
-    const pendingMessage = appendChatMessage('bot', 'Working through the current directory context...');
+    const pendingMessage = appendChatMessage('bot', '');
+    pendingMessage.classList.add('is-loading');
+    pendingMessage.innerHTML = `
+        <span class="typing-dots" aria-label="Assistant is typing" role="status">
+            <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+        </span>
+    `;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 50_000);
 
     try {
         const response = await fetch('/api/chat', {
@@ -1140,6 +1149,7 @@ async function sendAssistantPrompt(message) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            signal: controller.signal,
             body: JSON.stringify({
                 message: trimmedMessage,
                 previousResponseId: assistantPreviousResponseId,
@@ -1154,11 +1164,18 @@ async function sendAssistantPrompt(message) {
         }
 
         assistantPreviousResponseId = payload.responseId || assistantPreviousResponseId;
+        pendingMessage.classList.remove('is-loading');
         pendingMessage.innerHTML = formatAssistantResponse(payload.answer || 'No response returned.');
         renderAssistantResults(payload.context || []);
     } catch (error) {
-        pendingMessage.textContent = error.message || 'Assistant request failed.';
+        pendingMessage.classList.remove('is-loading');
+        if (error && error.name === 'AbortError') {
+            pendingMessage.textContent = 'Assistant request timed out. Please try again.';
+        } else {
+            pendingMessage.textContent = error.message || 'Assistant request failed.';
+        }
     } finally {
+        clearTimeout(timeout);
         assistantRequestInFlight = false;
         chatSend.disabled = false;
         chatInput.disabled = false;
@@ -1469,21 +1486,44 @@ function renderAssistantResults(items) {
     }
 
     if (!items.length) {
-        assistantResults.innerHTML = '';
         return;
     }
 
-    assistantResults.innerHTML = `
-        <div class="assistant-results-list">
-            ${items.map(item => `
-                <article class="assistant-result-card">
-                    <h3>${escapeHtml(item.name || 'Untitled')}</h3>
-                    <p>${escapeHtml([item.category, item.industry, item.location].filter(Boolean).join(' | '))}</p>
-                    ${item.website ? `<a href="${escapeAttribute(item.website)}" target="_blank" rel="noopener">Open website</a>` : ''}
-                </article>
-            `).join('')}
-        </div>
-    `;
+    let list = assistantResults.querySelector('.assistant-results-list');
+    if (!list) {
+        list = document.createElement('div');
+        list.className = 'assistant-results-list';
+        assistantResults.appendChild(list);
+    }
+
+    const existingKeys = new Set(
+        Array.from(list.querySelectorAll('[data-company-key]'))
+            .map(node => node.getAttribute('data-company-key') || '')
+            .filter(Boolean)
+    );
+
+    items.forEach(item => {
+        const name = item.name || 'Untitled';
+        const companyKey = name.trim().toLowerCase();
+        if (companyKey && existingKeys.has(companyKey)) {
+            return;
+        }
+
+        const card = document.createElement('article');
+        card.className = 'assistant-result-card';
+        if (companyKey) {
+            card.setAttribute('data-company-key', companyKey);
+            existingKeys.add(companyKey);
+        }
+
+        const details = [item.category, item.industry, item.location].filter(Boolean).join(' | ');
+        card.innerHTML = `
+            <h3>${escapeHtml(name)}</h3>
+            <p>${escapeHtml(details)}</p>
+            ${item.website ? `<a href="${escapeAttribute(item.website)}" target="_blank" rel="noopener">Open website</a>` : ''}
+        `;
+        list.appendChild(card);
+    });
 }
 
 function formatAssistantResponse(text) {
