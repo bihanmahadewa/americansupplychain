@@ -820,6 +820,16 @@ span.manufacturer-name {
     color: var(--muted);
 }
 
+.data-attribution {
+    padding: 0 0 32px;
+}
+
+.data-attribution p {
+    max-width: 920px;
+    font-size: 12px;
+    color: var(--soft);
+}
+
 footer {
     padding: 20px 0 24px;
     border-top: 1px solid var(--ink);
