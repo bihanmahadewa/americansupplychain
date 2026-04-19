@@ -414,6 +414,35 @@ header h1 {
     z-index: 20;
 }
 
+.assistant-mobile-toggle,
+.assistant-mobile-backdrop {
+    display: none;
+}
+
+.assistant-mobile-toggle {
+    position: fixed;
+    top: 16px;
+    right: 14px;
+    border: 1px solid #111;
+    border-radius: 999px;
+    background: #111;
+    color: #fff;
+    padding: 8px 14px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    z-index: 36;
+}
+
+.assistant-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 34;
+}
+
 .assistant-panel-body {
     flex: 1;
     min-height: 0;
@@ -851,13 +880,36 @@ span.manufacturer-name {
         width: 100%;
     }
 
+    body.has-mobile-chat-open {
+        overflow: hidden;
+    }
+
+    .assistant-mobile-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .assistant-mobile-backdrop.is-visible {
+        display: block;
+    }
+
     .assistant-panel {
-        position: static;
-        width: auto;
-        height: auto;
-        border-left: 0;
-        border-top: 1px solid #ededed;
-        box-shadow: none;
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: min(90vw, 360px);
+        height: 100vh;
+        border-left: 1px solid #ededed;
+        border-top: 0;
+        box-shadow: -16px 0 36px rgba(0, 0, 0, 0.16);
+        transform: translateX(102%);
+        transition: transform 0.25s ease;
+        z-index: 35;
+    }
+
+    .assistant-panel.is-mobile-open {
+        transform: translateX(0);
     }
 
     .container {
@@ -948,18 +1000,27 @@ footer {
     }
 
     .filters,
-    .view-controls,
     .manufacturer-line {
         flex-direction: column;
         align-items: flex-start;
         gap: 4px;
     }
 
-    .filters select,
+    .view-controls {
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .filters select {
+        width: 100%;
+    }
+
     .filters button,
     .view-btn,
     #suggestBtn {
-        width: 100%;
+        width: auto;
+        min-width: 120px;
     }
 
     #networkGraph {
