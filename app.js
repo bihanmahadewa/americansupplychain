@@ -13,12 +13,15 @@ const chatInput = document.getElementById('chatInput');
 const chatSend = document.getElementById('chatSend');
 const chatMessages = document.getElementById('chatMessages');
 const assistantResults = document.getElementById('assistantResults');
+const assistantPanel = document.getElementById('assistantPanel');
 const assistantPanelBody = document.getElementById('assistantPanelBody');
 const assistantQuickLinks = document.getElementById('assistantQuickLinks');
 const assistantPowered = document.getElementById('assistantPowered');
 const funFactTrigger = document.getElementById('funFactTrigger');
 const funFactCard = document.getElementById('funFactCard');
 const funFactText = document.getElementById('funFactText');
+const assistantMobileToggle = document.getElementById('assistantMobileToggle');
+const assistantMobileBackdrop = document.getElementById('assistantMobileBackdrop');
 
 const visibleIndustryAliases = {
     'Alloy Development': 'Alloy development',
@@ -1348,6 +1351,7 @@ async function sendAssistantPrompt(message) {
         assistantRequestInFlight = false;
         chatSend.disabled = false;
         chatInput.disabled = false;
+        openMobileAssistantPanel();
         chatInput.focus();
         scrollChatToBottom();
     }
@@ -1373,6 +1377,26 @@ function attachEventListeners() {
         funFactTrigger.addEventListener('click', rotateFunFact);
     }
 
+    if (assistantMobileToggle) {
+        assistantMobileToggle.addEventListener('click', toggleMobileAssistantPanel);
+    }
+
+    if (assistantMobileBackdrop) {
+        assistantMobileBackdrop.addEventListener('click', closeMobileAssistantPanel);
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeMobileAssistantPanel();
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        if (!isMobileViewport()) {
+            closeMobileAssistantPanel();
+        }
+    });
+
     if (assistantQuickLinks) {
         assistantQuickLinks.querySelectorAll('[data-prompt]').forEach(button => {
             button.addEventListener('click', async () => {
@@ -1385,6 +1409,59 @@ function attachEventListeners() {
     suggestBtn.addEventListener('click', () => {
         window.open('https://github.com/bihanmahadewa/americansupplychain', '_blank');
     });
+}
+
+function isMobileViewport() {
+    return window.matchMedia('(max-width: 720px)').matches;
+}
+
+function toggleMobileAssistantPanel() {
+    if (!isMobileViewport()) {
+        chatInput.focus();
+        return;
+    }
+
+    if (assistantPanel && assistantPanel.classList.contains('is-mobile-open')) {
+        closeMobileAssistantPanel();
+    } else {
+        openMobileAssistantPanel();
+    }
+}
+
+function openMobileAssistantPanel() {
+    if (!isMobileViewport() || !assistantPanel) {
+        return;
+    }
+
+    assistantPanel.classList.add('is-mobile-open');
+    document.body.classList.add('has-mobile-chat-open');
+
+    if (assistantMobileBackdrop) {
+        assistantMobileBackdrop.hidden = false;
+        assistantMobileBackdrop.classList.add('is-visible');
+    }
+
+    if (assistantMobileToggle) {
+        assistantMobileToggle.setAttribute('aria-expanded', 'true');
+    }
+}
+
+function closeMobileAssistantPanel() {
+    if (!assistantPanel) {
+        return;
+    }
+
+    assistantPanel.classList.remove('is-mobile-open');
+    document.body.classList.remove('has-mobile-chat-open');
+
+    if (assistantMobileBackdrop) {
+        assistantMobileBackdrop.classList.remove('is-visible');
+        assistantMobileBackdrop.hidden = true;
+    }
+
+    if (assistantMobileToggle) {
+        assistantMobileToggle.setAttribute('aria-expanded', 'false');
+    }
 }
 
 function switchView(view) {
