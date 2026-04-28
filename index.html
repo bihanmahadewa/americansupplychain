@@ -67,38 +67,43 @@
         </header>
 
         <main class="container">
-            <section class="search-section">
-                <div class="story-intro">
-                    <p class="story-kicker">Interactive Atlas</p>
-                    <h2>Tracking American Industrial Capacity</h2>
-                    <p class="story-lede">Scroll, filter, and explore where U.S. manufacturers are concentrated across the national supply chain.</p>
-                </div>
-                <div class="filters">
-                    <select id="stateFilter">
-                        <option value="">All States</option>
-                    </select>
-
-                    <select id="industryFilter">
-                        <option value="">All Sectors</option>
-                    </select>
-
-                    <button id="clearFilters">Clear</button>
-                </div>
-
-                <div class="view-controls">
-                    <button id="treeViewBtn" class="view-btn active">List</button>
-                    <button id="graphViewBtn" class="view-btn">Map</button>
-                    <button id="mapModeCategoriesBtn" class="view-btn active" type="button">Categories</button>
-                    <button id="mapModeCompaniesBtn" class="view-btn" type="button">Companies</button>
-                </div>
-
-                <div class="results-info">
-                    <span id="resultsCount">0 manufacturers indexed</span>
-                </div>
-            </section>
-
             <section class="graph-container" id="graphContainer">
+                <section class="search-section map-search-panel" aria-label="Search and filter manufacturers">
+                    <div class="map-search-box">
+                        <label class="search-label" for="mapSearchInput">Search manufacturers</label>
+                        <input
+                            id="mapSearchInput"
+                            type="search"
+                            autocomplete="off"
+                            placeholder="Search company, capability, product, city..."
+                        >
+                    </div>
+
+                    <div class="filters">
+                        <select id="stateFilter" aria-label="Filter by state">
+                            <option value="">All States</option>
+                        </select>
+
+                        <select id="industryFilter" aria-label="Filter by sector">
+                            <option value="">All Sectors</option>
+                        </select>
+
+                        <button id="clearFilters" type="button">Clear</button>
+                    </div>
+
+                    <div class="view-controls">
+                        <button id="treeViewBtn" class="view-btn" type="button">List</button>
+                        <button id="graphViewBtn" class="view-btn active" type="button">Map</button>
+                        <button id="mapModeCategoriesBtn" class="view-btn" type="button">Clusters</button>
+                        <button id="mapModeCompaniesBtn" class="view-btn active" type="button">Places</button>
+                    </div>
+
+                    <div class="results-info">
+                        <span id="resultsCount">0 manufacturers indexed</span>
+                    </div>
+                </section>
                 <div id="networkGraph" aria-label="Map of U.S. manufacturers"></div>
+                <aside class="map-detail-panel" id="mapDetailPanel" hidden aria-live="polite"></aside>
                 <div class="map-legend" id="mapLegend"></div>
             </section>
 

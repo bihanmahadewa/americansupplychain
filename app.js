@@ -5,6 +5,8 @@ const clearFiltersBtn = document.getElementById('clearFilters');
 const directoryGrid = document.getElementById('directoryGrid');
 const graphContainer = document.getElementById('graphContainer');
 const networkGraphEl = document.getElementById('networkGraph');
+const mapSearchInput = document.getElementById('mapSearchInput');
+const mapDetailPanel = document.getElementById('mapDetailPanel');
 const resultsCount = document.getElementById('resultsCount');
 const suggestBtn = document.getElementById('suggestBtn');
 const treeViewBtn = document.getElementById('treeViewBtn');
@@ -589,20 +591,23 @@ const manufacturerImportKeys = new Set(manufacturers.map((manufacturer) => (
 )));
 
 let filteredManufacturers = [...manufacturers];
-let currentView = 'tree';
-let mapDisplayMode = 'categories';
+let currentView = 'graph';
+let mapDisplayMode = 'companies';
 let usMap = null;
 let markerLayer = null;
 let referenceLayer = null;
+let mapMarkerRenderer = null;
 let activeMapCategory = null;
 let markerAnimationTimer = null;
 let usTopoJsonPromise = null;
 let staticSvgRenderToken = 0;
+let mapSearchDebounceTimer = null;
 let lastRenderedUnmappedManufacturers = [];
 const companyDetailsCache = new Map();
 let mfgTotalAvailable = 0;
 let mfgLoadedCount = 0;
 let mfgLoadOffset = 0;
+let mfgEnrichmentOverrides = {};
 let assistantPreviousResponseId = null;
 let assistantRequestInFlight = false;
 let hasStartedAssistantConversation = false;
@@ -822,13 +827,14 @@ const allUSStates = [
 document.addEventListener('DOMContentLoaded', async () => {
     setAppLoading(true);
     attachEventListeners();
-    switchView('tree');
+    switchView('graph');
     moveStorySectionToBottom();
     normalizeManufacturerIndustries(manufacturers);
     await loadIqsCompanies();
     await loadMfgCompanies();
+    filteredManufacturers = [...manufacturers];
     populateFilters();
-    renderManufacturers(manufacturers);
+    switchView('graph');
     initializeFunFacts();
     renderStoryPanels();
     initializeStoryObserver();
@@ -878,6 +884,7 @@ async function loadIqsCompanies() {
 
 async function loadMfgCompanies() {
     try {
+        await loadMfgEnrichmentOverrides();
         const response = await fetch('mfg-companies-lite.json?v=20260425-1', { cache: 'no-store' });
         if (!response.ok) {
             return;
@@ -889,26 +896,10 @@ async function loadMfgCompanies() {
         }
         mfgTotalAvailable = rows.length;
         const records = rows.map((row) => ({
-            id: row?.[0],
-            name: row?.[1] || '',
-            twitter: '',
-            twitterUrl: '',
-            website: row?.[5] || '',
-            email: '',
-            phone: '',
-            location: {
-                city: row?.[3] || '',
-                state: row?.[4] || '',
-                zip: ''
-            },
-            industry: row?.[2] || 'Manufacturing',
-            products: [],
-            description: '',
-            founded: null,
-            employees: '',
+            ...buildMfgRecordFromRow(row),
             source: 'MFG Companies import',
             sourceCategory: 'Bulk import lite',
-            detailsLoaded: false
+            detailsLoaded: Boolean(mfgEnrichmentOverrides[String(row?.[0])]?.description)
         }));
 
         if (!records.length) {
@@ -921,6 +912,47 @@ async function loadMfgCompanies() {
     } catch (error) {
         console.warn('Unable to load MFG company imports.', error);
     }
+}
+
+async function loadMfgEnrichmentOverrides() {
+    try {
+        const response = await fetch('mfg-enrichment-overrides.json?v=20260428-1', { cache: 'no-store' });
+        if (!response.ok) {
+            mfgEnrichmentOverrides = {};
+            return;
+        }
+        const payload = await response.json();
+        mfgEnrichmentOverrides = payload && typeof payload === 'object' ? payload : {};
+    } catch (error) {
+        mfgEnrichmentOverrides = {};
+    }
+}
+
+function buildMfgRecordFromRow(row) {
+    const id = String(row?.[0]);
+    const override = mfgEnrichmentOverrides[id] || {};
+    const locationOverride = override.location || {};
+
+    return {
+        id: row?.[0],
+        name: row?.[1] || '',
+        twitter: '',
+        twitterUrl: '',
+        website: override.website || row?.[5] || '',
+        email: '',
+        phone: '',
+        location: {
+            city: locationOverride.city || row?.[3] || '',
+            state: locationOverride.state || row?.[4] || '',
+            zip: locationOverride.zip || ''
+        },
+        industry: row?.[2] || 'Manufacturing',
+        products: Array.isArray(override.products) ? override.products : [],
+        description: override.description || '',
+        founded: null,
+        employees: '',
+        geo: override.geo || null
+    };
 }
 
 function mergeImportedManufacturers(importedManufacturers) {
@@ -1531,24 +1563,49 @@ function escapeAttribute(value) {
     return escapeHtml(value);
 }
 
+function normalizeSearchText(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9@.]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function getManufacturerSearchText(manufacturer) {
+    return normalizeSearchText([
+        manufacturer.name,
+        manufacturer.industry,
+        manufacturer.description,
+        (manufacturer.products || []).join(' '),
+        manufacturer.location?.city,
+        manufacturer.location?.state,
+        manufacturer.website,
+        manufacturer.email
+    ].filter(Boolean).join(' '));
+}
+
 function filterManufacturers() {
     const selectedState = stateFilter.value;
     const selectedIndustry = industryFilter.value;
+    const searchQuery = normalizeSearchText(mapSearchInput?.value || '');
 
     filteredManufacturers = manufacturers.filter(manufacturer => {
         const matchesState = selectedState === '' || manufacturer.location.state === selectedState;
         const matchesIndustry = selectedIndustry === '' || manufacturer.industry === selectedIndustry;
+        const matchesSearch = !searchQuery || getManufacturerSearchText(manufacturer).includes(searchQuery);
 
-        return matchesState && matchesIndustry;
+        return matchesState && matchesIndustry && matchesSearch;
     });
 
-    renderManufacturers(filteredManufacturers);
+    if (currentView === 'tree') {
+        renderManufacturers(filteredManufacturers);
 
-    // Auto-expand first subcategory when industry filter is selected
-    if (selectedIndustry && selectedIndustry !== '') {
-        const firstSubcategory = directoryGrid.querySelector('.subcategory-card.has-data');
-        if (firstSubcategory) {
-            firstSubcategory.click();
+        // Auto-expand first subcategory when industry filter is selected
+        if (selectedIndustry && selectedIndustry !== '') {
+            const firstSubcategory = directoryGrid.querySelector('.subcategory-card.has-data');
+            if (firstSubcategory) {
+                firstSubcategory.click();
+            }
         }
     }
 
@@ -1561,7 +1618,11 @@ function filterManufacturers() {
 function clearFilters() {
     stateFilter.value = '';
     industryFilter.value = '';
+    if (mapSearchInput) {
+        mapSearchInput.value = '';
+    }
     activeMapCategory = null;
+    closeMapDetailPanel();
     filterManufacturers();
 }
 
@@ -1638,6 +1699,16 @@ async function sendAssistantPrompt(message) {
 function attachEventListeners() {
     stateFilter.addEventListener('change', filterManufacturers);
     industryFilter.addEventListener('change', filterManufacturers);
+    if (mapSearchInput) {
+        mapSearchInput.addEventListener('input', () => {
+            window.clearTimeout(mapSearchDebounceTimer);
+            mapSearchDebounceTimer = window.setTimeout(() => {
+                activeMapCategory = null;
+                closeMapDetailPanel();
+                filterManufacturers();
+            }, 120);
+        });
+    }
     clearFiltersBtn.addEventListener('click', clearFilters);
 
     treeViewBtn.addEventListener('click', () => switchView('tree'));
@@ -1710,6 +1781,9 @@ function attachEventListeners() {
     window.addEventListener('resize', () => {
         if (!isMobileViewport()) {
             closeMobileAssistantPanel();
+        }
+        if (currentView === 'graph' && usMap) {
+            usMap.invalidateSize();
         }
     });
 
@@ -1795,6 +1869,7 @@ function switchView(view) {
     if (view === 'tree') {
         treeViewBtn.classList.add('active');
         graphViewBtn.classList.remove('active');
+        renderManufacturers(filteredManufacturers);
         directoryGrid.style.display = 'block';
         graphContainer.style.display = 'none';
         if (scrollStory) {
@@ -1813,15 +1888,8 @@ function switchView(view) {
     renderGraph(filteredManufacturers);
 }
 
-function renderGraph(manufacturersToGraph) {
-    if (mapDisplayMode === 'categories') {
-        generateMapLegend(manufacturersToGraph);
-    } else {
-        generateMapLegend([]);
-    }
-
+function buildMapPins(manufacturersToGraph) {
     const pins = [];
-    const categoryBuckets = new Map();
 
     manufacturersToGraph.forEach(manufacturer => {
         const coordinates = getManufacturerCoordinates(manufacturer);
@@ -1830,54 +1898,218 @@ function renderGraph(manufacturersToGraph) {
         }
 
         const assignment = manufacturerAssignments.get(manufacturer.id);
-        const location = formatLocation(manufacturer.location);
-        const markerColor = getCategoryColor(assignment);
         const categoryLabel = getMainCategoryLabel(assignment);
-        const isActiveCategory = !activeMapCategory || categoryLabel === activeMapCategory;
-        if (!isActiveCategory) {
-            return;
-        }
-
-        if (mapDisplayMode === 'categories') {
-            const stateLabel = manufacturer.location?.state || 'Unknown state';
-            const bucketKey = `${categoryLabel}|${stateLabel}`;
-            const bucket = categoryBuckets.get(bucketKey) || {
-                coordinates,
-                markerColor,
-                categoryLabel,
-                location: stateLabel,
-                count: 0
-            };
-            bucket.count += 1;
-            categoryBuckets.set(bucketKey, bucket);
+        if (activeMapCategory && categoryLabel !== activeMapCategory) {
             return;
         }
 
         pins.push({
             manufacturer,
             coordinates,
-            markerColor,
+            markerColor: getCategoryColor(assignment),
             categoryLabel,
-            location
+            location: formatLocation(manufacturer.location)
         });
     });
 
-    if (mapDisplayMode === 'categories') {
-        pins.push(...Array.from(categoryBuckets.values()).map((bucket) => ({
-            manufacturer: {
-                name: `${bucket.categoryLabel} (${bucket.count.toLocaleString()})`
-            },
-            coordinates: bucket.coordinates,
-            markerColor: bucket.markerColor,
-            categoryLabel: bucket.categoryLabel,
-            location: bucket.location,
-            isCategoryAggregate: true,
-            count: bucket.count
-        })));
+    return pins;
+}
+
+function shouldRenderIndividualMapPins(pinCount) {
+    const zoom = usMap?.getZoom() || defaultUSView.zoom;
+    const hasSearch = Boolean(normalizeSearchText(mapSearchInput?.value || ''));
+    const hasFilter = Boolean(stateFilter.value || industryFilter.value || activeMapCategory);
+
+    return zoom >= 7 || pinCount <= 900 || (hasSearch && pinCount <= 4000) || (hasFilter && zoom >= 6 && pinCount <= 5000);
+}
+
+function buildAggregateMapPins(pins) {
+    const zoom = usMap?.getZoom() || defaultUSView.zoom;
+    const buckets = new Map();
+
+    pins.forEach((pin) => {
+        const key = mapDisplayMode === 'categories'
+            ? `${pin.categoryLabel}|${pin.manufacturer.location?.state || 'Unknown state'}`
+            : getSpatialBucketKey(pin.coordinates, zoom);
+        const bucket = buckets.get(key) || {
+            coordinates: [0, 0],
+            markerColor: pin.markerColor,
+            categoryLabel: mapDisplayMode === 'categories' ? pin.categoryLabel : 'Manufacturers',
+            location: mapDisplayMode === 'categories'
+                ? pin.manufacturer.location?.state || 'Unknown state'
+                : 'Zoom in for individual places',
+            count: 0,
+            samples: [],
+            isAggregate: true
+        };
+
+        bucket.coordinates[0] += pin.coordinates[0];
+        bucket.coordinates[1] += pin.coordinates[1];
+        bucket.count += 1;
+        if (bucket.samples.length < 3) {
+            bucket.samples.push(pin.manufacturer.name);
+        }
+        buckets.set(key, bucket);
+    });
+
+    return Array.from(buckets.values()).map((bucket) => ({
+        ...bucket,
+        coordinates: [
+            bucket.coordinates[0] / bucket.count,
+            bucket.coordinates[1] / bucket.count
+        ]
+    }));
+}
+
+function getSpatialBucketKey(coordinates, zoom) {
+    const cellSize = zoom <= 4 ? 2.8 : zoom <= 5 ? 1.35 : 0.62;
+    const latBucket = Math.floor(coordinates[0] / cellSize);
+    const lngBucket = Math.floor(coordinates[1] / cellSize);
+    return `${latBucket}|${lngBucket}`;
+}
+
+function getAggregateMarkerRadius(count) {
+    return Math.min(26, Math.max(8, Math.log10((count || 1) + 1) * 8.5));
+}
+
+function getMapTooltipMarkup(pin) {
+    if (pin.isAggregate) {
+        const samples = pin.samples?.length
+            ? `<span>${escapeHtml(pin.samples.join(', '))}</span>`
+            : '';
+        return `
+            <strong>${pin.count.toLocaleString()} manufacturers</strong>
+            <span>${escapeHtml(pin.categoryLabel)} | ${escapeHtml(pin.location)}</span>
+            ${samples}
+        `;
     }
 
-    staticSvgRenderToken += 1;
-    renderStaticSvgMap(pins, staticSvgRenderToken);
+    return `
+        <strong>${escapeHtml(pin.manufacturer.name || 'Manufacturer')}</strong>
+        <span>${escapeHtml(pin.location || 'Location unavailable')}</span>
+        <span>${escapeHtml(pin.categoryLabel || pin.manufacturer.industry || 'Manufacturing')}</span>
+    `;
+}
+
+function updateMapModeHint(showingPlaces, mappableCount, renderedCount) {
+    if (!resultsCount) {
+        return;
+    }
+
+    const visibleLabel = showingPlaces
+        ? `${renderedCount.toLocaleString()} places shown`
+        : `${renderedCount.toLocaleString()} clusters shown`;
+    resultsCount.textContent = `${filteredManufacturers.length.toLocaleString()} matches | ${mappableCount.toLocaleString()} mappable | ${visibleLabel}`;
+}
+
+function showMapDetailPanel(manufacturer) {
+    if (!mapDetailPanel || !manufacturer) {
+        return;
+    }
+
+    const location = formatLocation(manufacturer.location);
+    const assignment = manufacturerAssignments.get(manufacturer.id);
+    const categoryLabel = getMainCategoryLabel(assignment);
+    const website = manufacturer.website
+        ? `<a href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">${escapeHtml(formatWebsiteLabel(manufacturer.website))}</a>`
+        : '<span>No website listed</span>';
+    const products = (manufacturer.products || []).filter(Boolean);
+
+    mapDetailPanel.innerHTML = `
+        <button class="map-detail-close" type="button" aria-label="Close place details">&times;</button>
+        <p class="map-detail-kicker">${escapeHtml(categoryLabel)}</p>
+        <h2>${escapeHtml(manufacturer.name || 'Manufacturer')}</h2>
+        <p class="map-detail-location">${escapeHtml(location || 'Location unavailable')}</p>
+        <p class="map-detail-description">${escapeHtml(manufacturer.description || 'No description available yet.')}</p>
+        <dl class="map-detail-list">
+            <div>
+                <dt>Sector</dt>
+                <dd>${escapeHtml(manufacturer.industry || 'Manufacturing')}</dd>
+            </div>
+            <div>
+                <dt>Products</dt>
+                <dd>${escapeHtml(products.length ? products.slice(0, 6).join(', ') : 'Not listed')}</dd>
+            </div>
+            <div>
+                <dt>Website</dt>
+                <dd>${website}</dd>
+            </div>
+        </dl>
+    `;
+    mapDetailPanel.hidden = false;
+
+    const closeButton = mapDetailPanel.querySelector('.map-detail-close');
+    if (closeButton) {
+        closeButton.addEventListener('click', closeMapDetailPanel);
+    }
+}
+
+function closeMapDetailPanel() {
+    if (mapDetailPanel) {
+        mapDetailPanel.hidden = true;
+        mapDetailPanel.innerHTML = '';
+    }
+}
+
+function renderGraph(manufacturersToGraph) {
+    generateMapLegend(manufacturersToGraph);
+
+    if (!networkGraphEl) {
+        return;
+    }
+
+    if (typeof L === 'undefined') {
+        staticSvgRenderToken += 1;
+        renderStaticSvgMap([], staticSvgRenderToken);
+        return;
+    }
+
+    initializeUSMap();
+
+    if (!usMap || !markerLayer) {
+        return;
+    }
+
+    markerLayer.clearLayers();
+
+    const pins = buildMapPins(manufacturersToGraph);
+    const shouldRenderPlaces = mapDisplayMode === 'companies' && shouldRenderIndividualMapPins(pins.length);
+    const visiblePins = shouldRenderPlaces ? pins : buildAggregateMapPins(pins);
+
+    visiblePins.forEach((pin) => {
+        const isAggregate = Boolean(pin.isAggregate);
+        const marker = L.circleMarker(pin.coordinates, {
+            renderer: mapMarkerRenderer,
+            radius: isAggregate ? getAggregateMarkerRadius(pin.count) : 5,
+            color: '#ffffff',
+            weight: isAggregate ? 1.5 : 1,
+            fillColor: pin.markerColor,
+            fillOpacity: isAggregate ? 0.82 : 0.74
+        });
+
+        marker.bindTooltip(getMapTooltipMarkup(pin), {
+            direction: 'top',
+            offset: [0, -8],
+            opacity: 0.96,
+            sticky: true
+        });
+
+        marker.on('click', () => {
+            if (isAggregate) {
+                const nextZoom = Math.min(usMap.getMaxZoom(), Math.max(usMap.getZoom() + 2, 6));
+                usMap.setView(pin.coordinates, nextZoom, { animate: true });
+                closeMapDetailPanel();
+                return;
+            }
+
+            showMapDetailPanel(pin.manufacturer);
+            usMap.panTo(pin.coordinates, { animate: true });
+        });
+
+        marker.addTo(markerLayer);
+    });
+
+    updateMapModeHint(shouldRenderPlaces, pins.length, visiblePins.length);
 }
 
 function initializeUSMap() {
@@ -1885,21 +2117,33 @@ function initializeUSMap() {
         return;
     }
 
+    mapMarkerRenderer = L.canvas({ padding: 0.35 });
     usMap = L.map(networkGraphEl, {
         center: defaultUSView.center,
         zoom: defaultUSView.zoom,
         minZoom: 3,
-        zoomControl: true
+        maxZoom: 12,
+        zoomControl: true,
+        preferCanvas: true
     });
 
-    referenceLayer = L.layerGroup().addTo(usMap);
-    addReferenceMapChrome();
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(usMap);
+
     usMap.fitBounds(lower48Bounds, {
         padding: [18, 18],
         maxZoom: 5
     });
+    usMap.zoomControl.setPosition('bottomright');
 
     markerLayer = L.layerGroup().addTo(usMap);
+    usMap.on('zoomend moveend', () => {
+        if (currentView === 'graph') {
+            renderGraph(filteredManufacturers);
+        }
+    });
 }
 
 async function renderStaticSvgMap(pins, renderToken) {
@@ -2117,6 +2361,12 @@ function addReferenceMapChrome() {
 }
 
 function getManufacturerCoordinates(manufacturer) {
+    const geoLat = Number(manufacturer.geo?.lat);
+    const geoLon = Number(manufacturer.geo?.lon);
+    if (Number.isFinite(geoLat) && Number.isFinite(geoLon)) {
+        return [geoLat, geoLon];
+    }
+
     const rawState = normalizeGeographyToken(manufacturer.location.state);
     const stateKey = resolveStateKey(rawState);
 
