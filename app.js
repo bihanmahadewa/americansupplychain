@@ -9,6 +9,8 @@ const resultsCount = document.getElementById('resultsCount');
 const suggestBtn = document.getElementById('suggestBtn');
 const treeViewBtn = document.getElementById('treeViewBtn');
 const graphViewBtn = document.getElementById('graphViewBtn');
+const mapModeCategoriesBtn = document.getElementById('mapModeCategoriesBtn');
+const mapModeCompaniesBtn = document.getElementById('mapModeCompaniesBtn');
 const chatInput = document.getElementById('chatInput');
 const chatSend = document.getElementById('chatSend');
 const chatMessages = document.getElementById('chatMessages');
@@ -20,8 +22,12 @@ const assistantPowered = document.getElementById('assistantPowered');
 const funFactTrigger = document.getElementById('funFactTrigger');
 const funFactCard = document.getElementById('funFactCard');
 const funFactText = document.getElementById('funFactText');
+const hottestStartupsList = document.getElementById('hottestStartupsList');
+const peopleToFollowList = document.getElementById('peopleToFollowList');
+const scrollStory = document.getElementById('scrollStory');
 const assistantMobileToggle = document.getElementById('assistantMobileToggle');
 const assistantMobileBackdrop = document.getElementById('assistantMobileBackdrop');
+const appLoadingOverlay = document.getElementById('appLoadingOverlay');
 
 const visibleIndustryAliases = {
     'Alloy Development': 'Alloy development',
@@ -578,12 +584,25 @@ const tierTaxonomy = [
 const taxonomyIndex = flattenTaxonomy(tierTaxonomy);
 const expandedSubcategories = new Set();
 let manufacturerAssignments = buildManufacturerAssignmentLookup();
+const manufacturerImportKeys = new Set(manufacturers.map((manufacturer) => (
+    `${normalizeImportKey(manufacturer.name)}|${manufacturer.industry}`
+)));
 
 let filteredManufacturers = [...manufacturers];
 let currentView = 'tree';
+let mapDisplayMode = 'categories';
 let usMap = null;
 let markerLayer = null;
+let referenceLayer = null;
 let activeMapCategory = null;
+let markerAnimationTimer = null;
+let usTopoJsonPromise = null;
+let staticSvgRenderToken = 0;
+let lastRenderedUnmappedManufacturers = [];
+const companyDetailsCache = new Map();
+let mfgTotalAvailable = 0;
+let mfgLoadedCount = 0;
+let mfgLoadOffset = 0;
 let assistantPreviousResponseId = null;
 let assistantRequestInFlight = false;
 let hasStartedAssistantConversation = false;
@@ -601,6 +620,10 @@ const defaultUSView = {
     center: [39.5, -98.35],
     zoom: 4
 };
+const lower48Bounds = [
+    [24.3, -125.2],
+    [49.8, -66.6]
+];
 
 const stateCentroids = {
     alabama: [32.806671, -86.79113],
@@ -797,13 +820,42 @@ const allUSStates = [
 ];
 
 document.addEventListener('DOMContentLoaded', async () => {
+    setAppLoading(true);
+    attachEventListeners();
+    switchView('tree');
+    moveStorySectionToBottom();
     normalizeManufacturerIndustries(manufacturers);
     await loadIqsCompanies();
+    await loadMfgCompanies();
     populateFilters();
     renderManufacturers(manufacturers);
     initializeFunFacts();
-    attachEventListeners();
+    renderStoryPanels();
+    initializeStoryObserver();
+    setAppLoading(false);
 });
+
+function moveStorySectionToBottom() {
+    if (!scrollStory) {
+        return;
+    }
+
+    const main = document.querySelector('main.container');
+    if (!main) {
+        return;
+    }
+
+    main.appendChild(scrollStory);
+}
+
+function setAppLoading(isLoading) {
+    if (!appLoadingOverlay) {
+        return;
+    }
+
+    document.body.classList.toggle('is-loading', Boolean(isLoading));
+    appLoadingOverlay.classList.toggle('is-hidden', !isLoading);
+}
 
 async function loadIqsCompanies() {
     if (Array.isArray(window.__iqsCompaniesData) && window.__iqsCompaniesData.length > 0) {
@@ -824,26 +876,68 @@ async function loadIqsCompanies() {
     }
 }
 
+async function loadMfgCompanies() {
+    try {
+        const response = await fetch('mfg-companies-lite.json?v=20260425-1', { cache: 'no-store' });
+        if (!response.ok) {
+            return;
+        }
+
+        const rows = await response.json();
+        if (!Array.isArray(rows)) {
+            return;
+        }
+        mfgTotalAvailable = rows.length;
+        const records = rows.map((row) => ({
+            id: row?.[0],
+            name: row?.[1] || '',
+            twitter: '',
+            twitterUrl: '',
+            website: row?.[5] || '',
+            email: '',
+            phone: '',
+            location: {
+                city: row?.[3] || '',
+                state: row?.[4] || '',
+                zip: ''
+            },
+            industry: row?.[2] || 'Manufacturing',
+            products: [],
+            description: '',
+            founded: null,
+            employees: '',
+            source: 'MFG Companies import',
+            sourceCategory: 'Bulk import lite',
+            detailsLoaded: false
+        }));
+
+        if (!records.length) {
+            return;
+        }
+
+        mergeImportedManufacturers(records);
+        mfgLoadedCount = records.length;
+        mfgLoadOffset = records.length;
+    } catch (error) {
+        console.warn('Unable to load MFG company imports.', error);
+    }
+}
+
 function mergeImportedManufacturers(importedManufacturers) {
     normalizeManufacturerIndustries(importedManufacturers);
 
-    const existingKeys = new Set(manufacturers.map((manufacturer) => (
-        `${normalizeImportKey(manufacturer.name)}|${manufacturer.industry}`
-    )));
     let didAddManufacturer = false;
 
     importedManufacturers.forEach((manufacturer) => {
         const key = `${normalizeImportKey(manufacturer.name)}|${manufacturer.industry}`;
-        if (!existingKeys.has(key)) {
+        if (!manufacturerImportKeys.has(key)) {
             manufacturers.push(manufacturer);
-            existingKeys.add(key);
+            manufacturerImportKeys.add(key);
+            manufacturerAssignments.set(manufacturer.id, assignManufacturerToTaxonomy(manufacturer));
             didAddManufacturer = true;
         }
     });
-
-    if (didAddManufacturer) {
-        manufacturerAssignments = buildManufacturerAssignmentLookup();
-    }
+    return didAddManufacturer;
 }
 
 function normalizeImportKey(value) {
@@ -954,6 +1048,7 @@ function populateFilters() {
 
 function renderManufacturers(manufacturersToRender) {
     const boardData = buildBoardData(manufacturersToRender);
+    lastRenderedUnmappedManufacturers = boardData.unmappedManufacturers;
 
     directoryGrid.innerHTML = renderBoardMarkup(boardData, manufacturersToRender.length === 0);
     updateResultsSummary(boardData, manufacturersToRender.length);
@@ -1010,6 +1105,7 @@ function buildBoardData(manufacturersToRender) {
     return {
         sections,
         unmappedManufacturers: unmappedManufacturers.sort(compareManufacturers),
+        categorizedCount: manufacturersToRender.length - unmappedManufacturers.length,
         populatedSubcategories,
         totalSubcategories: taxonomyIndex.length
     };
@@ -1018,11 +1114,12 @@ function buildBoardData(manufacturersToRender) {
 function renderBoardMarkup(boardData, noMatches) {
     const isFilterActive = stateFilter.value || industryFilter.value;
     const boardMarkup = boardData.sections.map(section => renderSectionMarkup(section, isFilterActive)).join('');
+    const unmappedMarkup = renderUnmappedSectionMarkup(boardData.unmappedManufacturers);
     const noMatchesMarkup = noMatches
         ? '<div class="no-results">No companies match the current filters. The empty directory stays visible so the gaps remain obvious.</div>'
         : '';
 
-    return `${noMatchesMarkup}${boardMarkup}`;
+    return `${noMatchesMarkup}${boardMarkup}${unmappedMarkup}`;
 }
 
 function renderSectionMarkup(section, isFilterActive) {
@@ -1075,8 +1172,41 @@ function renderSubcategoryMarkup(subcategory) {
     `;
 }
 
+function renderUnmappedSectionMarkup(unmappedManufacturers) {
+    if (!Array.isArray(unmappedManufacturers) || unmappedManufacturers.length === 0) {
+        return '';
+    }
+
+    return `
+        <section class="section-board unmapped-section">
+            <div class="section-board-header">
+                <h2>Uncategorized</h2>
+                <span class="section-board-total">${unmappedManufacturers.length}</span>
+            </div>
+            <div class="subcategory-grid">
+                <div class="subcategory-card has-data" data-subcategory-key="uncategorized" data-is-uncategorized="true">
+                    <div class="subcategory-summary">
+                        <span class="subcategory-name">Pending category mapping</span>
+                        <span class="subcategory-badge">${unmappedManufacturers.length}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="section-content-area" id="section-content-uncategorized" style="display: none;"></div>
+        </section>
+    `;
+}
+
 function renderManufacturerMarkup(manufacturer) {
     const location = formatLocation(manufacturer.location);
+    const needsDetails = manufacturer.source === 'MFG Companies import' && !manufacturer.detailsLoaded;
+    const searchText = [
+        manufacturer.name,
+        location,
+        manufacturer.industry,
+        manufacturer.description,
+        (manufacturer.products || []).join(' '),
+        manufacturer.website
+    ].filter(Boolean).join(' ').toLowerCase();
     const links = [
         manufacturer.website
             ? `<a href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">${escapeHtml(formatWebsiteLabel(manufacturer.website))}</a>`
@@ -1088,18 +1218,28 @@ function renderManufacturerMarkup(manufacturer) {
     ].filter(Boolean).join(' | ');
     const badges = renderManufacturerBadges(manufacturer);
 
+    const website = manufacturer.website ? escapeAttribute(manufacturer.website) : '';
+    const sortName = String(manufacturer.name || '').toLowerCase();
+    const sortDescription = String(manufacturer.description || '').toLowerCase();
+    const sortProducts = String((manufacturer.products || []).join(', ') || '').toLowerCase();
+    const sortLinks = String(manufacturer.website || manufacturer.twitter || manufacturer.email || '').toLowerCase();
+
     return `
-        <li class="manufacturer-item">
-            <div class="manufacturer-line">
-                ${manufacturer.website
-                    ? `<a class="manufacturer-name" href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">${escapeHtml(manufacturer.name)}</a>`
-                    : `<span class="manufacturer-name">${escapeHtml(manufacturer.name)}</span>`}
+        <li class="manufacturer-item manufacturer-card${website ? ' is-clickable' : ''}"${website ? ` data-website="${website}"` : ''} data-search-text="${escapeAttribute(searchText)}" data-sort-name="${escapeAttribute(sortName)}" data-sort-description="${escapeAttribute(sortDescription)}" data-sort-products="${escapeAttribute(sortProducts)}" data-sort-links="${escapeAttribute(sortLinks)}">
+            <div class="manufacturer-card-head">
+                <div class="manufacturer-card-title">
+                    ${manufacturer.website
+                        ? `<a class="manufacturer-name" href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">${escapeHtml(manufacturer.name)}</a>`
+                        : `<span class="manufacturer-name">${escapeHtml(manufacturer.name)}</span>`}
+                    <span class="manufacturer-location">${escapeHtml(location)}</span>
+                </div>
                 ${badges}
-                <span class="manufacturer-location">${escapeHtml(location)}</span>
             </div>
-            <p class="manufacturer-description">${escapeHtml(manufacturer.description)}</p>
-            <p class="manufacturer-products">${escapeHtml(manufacturer.products.join(', '))}</p>
-            <p class="manufacturer-links">${links}</p>
+            <p class="manufacturer-description">${escapeHtml(manufacturer.description || (needsDetails ? 'Details available on demand.' : ''))}</p>
+            <div class="manufacturer-card-meta">
+                <p class="manufacturer-products"><strong>Products:</strong> ${escapeHtml((manufacturer.products || []).join(', ') || 'n/a')}</p>
+                <p class="manufacturer-links"><strong>Links:</strong> ${links}</p>
+            </div>
         </li>
     `;
 }
@@ -1187,6 +1327,8 @@ function updateResultsSummary(boardData, visibleCount) {
     if (hiddenCount > 0) {
         summaryParts.push(`${visibleCount} shown`);
     }
+    summaryParts.push(`${boardData.categorizedCount} categorized`);
+    summaryParts.push(`${boardData.unmappedManufacturers.length} uncategorized`);
 
     resultsCount.textContent = summaryParts.join('  |  ');
 }
@@ -1196,7 +1338,14 @@ function attachBoardEventListeners() {
         card.addEventListener('click', () => {
             const section = card.closest('.section-board');
             const contentArea = section.querySelector('.section-content-area');
-            const manufacturers = JSON.parse(decodeURIComponent(card.getAttribute('data-manufacturers') || '[]'));
+            const isUncategorized = card.getAttribute('data-is-uncategorized') === 'true';
+            const manufacturers = isUncategorized
+                ? lastRenderedUnmappedManufacturers
+                : JSON.parse(decodeURIComponent(card.getAttribute('data-manufacturers') || '[]'));
+            const maxRows = 2000;
+            const isTrimmed = manufacturers.length > maxRows;
+            const visibleManufacturers = isTrimmed ? manufacturers.slice(0, maxRows) : manufacturers;
+            const canLoadMoreMfg = isUncategorized && mfgTotalAvailable > mfgLoadedCount;
 
             // If clicking the same card that's already active, close it
             if (card.classList.contains('active')) {
@@ -1215,21 +1364,150 @@ function attachBoardEventListeners() {
 
             // Populate content area
             contentArea.innerHTML = `
-                <div class="manufacturer-table">
-                    <div class="manufacturer-table-header">
-                        <span>Company</span>
-                        <span>Description</span>
-                        <span>Products</span>
-                        <span>Links</span>
-                    </div>
-                    <ul class="manufacturer-list">
-                        ${manufacturers.map(renderManufacturerMarkup).join('')}
-                    </ul>
+                ${isTrimmed ? `<p class="table-limit-note">Showing first ${maxRows.toLocaleString()} of ${manufacturers.length.toLocaleString()} companies for performance. Use filters to narrow and view more.</p>` : ''}
+                ${canLoadMoreMfg ? `<p class="table-limit-note">Loaded ${mfgLoadedCount.toLocaleString()} of ${mfgTotalAvailable.toLocaleString()} MFG companies. <button type="button" class="load-more-mfg">Load more names</button></p>` : ''}
+                <div class="subcategory-search">
+                    <input type="search" class="subcategory-search-input" placeholder="Search companies in this list..." aria-label="Search companies in this list">
+                    <button type="button" class="manufacturer-sort-btn manufacturer-sort-company" data-sort-key="name">Sort Company</button>
+                    <span class="subcategory-search-count">${visibleManufacturers.length.toLocaleString()} shown</span>
                 </div>
+                <ul class="manufacturer-list manufacturer-card-list">
+                    ${visibleManufacturers.map(renderManufacturerMarkup).join('')}
+                </ul>
             `;
             contentArea.style.display = 'block';
+
+            const searchInput = contentArea.querySelector('.subcategory-search-input');
+            const searchCount = contentArea.querySelector('.subcategory-search-count');
+            if (searchInput && searchCount) {
+                searchInput.addEventListener('input', () => {
+                    const query = searchInput.value.trim().toLowerCase();
+                    let visibleRows = 0;
+
+                    contentArea.querySelectorAll('.manufacturer-item').forEach((row) => {
+                        const haystack = row.getAttribute('data-search-text') || '';
+                        const isMatch = !query || haystack.includes(query);
+                        row.style.display = isMatch ? '' : 'none';
+                        if (isMatch) {
+                            visibleRows += 1;
+                        }
+                    });
+
+                    searchCount.textContent = `${visibleRows.toLocaleString()} shown`;
+                });
+            }
+
+            const companySortBtn = contentArea.querySelector('.manufacturer-sort-company');
+            if (companySortBtn) {
+                companySortBtn.addEventListener('click', () => {
+                    const list = contentArea.querySelector('.manufacturer-list');
+                    if (!list) {
+                        return;
+                    }
+
+                    const previousSortDirection = contentArea.getAttribute('data-sort-direction') || 'asc';
+                    const nextDirection = previousSortDirection === 'asc' ? 'desc' : 'asc';
+                    contentArea.setAttribute('data-sort-direction', nextDirection);
+
+                    const rows = Array.from(list.querySelectorAll('.manufacturer-item'));
+                    rows.sort((a, b) => {
+                        const left = (a.getAttribute('data-sort-name') || '').toLowerCase();
+                        const right = (b.getAttribute('data-sort-name') || '').toLowerCase();
+                        const compare = left.localeCompare(right);
+                        return nextDirection === 'asc' ? compare : -compare;
+                    });
+
+                    rows.forEach((row) => list.appendChild(row));
+                    companySortBtn.classList.add('is-active');
+                    companySortBtn.classList.toggle('is-desc', nextDirection === 'desc');
+                });
+            }
+
+            contentArea.querySelectorAll('.manufacturer-item.is-clickable').forEach((item) => {
+                item.addEventListener('click', (event) => {
+                    if (event.target.closest('a, button')) {
+                        return;
+                    }
+
+                    const website = item.getAttribute('data-website');
+                    if (website) {
+                        window.open(website, '_blank', 'noopener');
+                    }
+                });
+            });
+
+            contentArea.querySelectorAll('.load-company-details').forEach((button) => {
+                button.addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    const id = Number(button.getAttribute('data-company-id') || 0);
+                    if (!id) {
+                        return;
+                    }
+
+                    const li = button.closest('.manufacturer-item');
+                    if (!li) {
+                        return;
+                    }
+
+                    button.disabled = true;
+                    button.textContent = 'loading...';
+
+                    const company = await fetchCompanyDetails(id);
+                    if (!company) {
+                        button.textContent = 'unavailable';
+                        return;
+                    }
+
+                    const manufacturer = manufacturers.find((row) => row.id === id);
+                    if (manufacturer) {
+                        Object.assign(manufacturer, company, { detailsLoaded: true });
+                    }
+
+                    li.outerHTML = renderManufacturerMarkup({
+                        ...(manufacturer || company),
+                        detailsLoaded: true
+                    });
+                });
+            });
+
+            contentArea.querySelectorAll('.load-more-mfg').forEach((button) => {
+                button.addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    button.disabled = true;
+                    button.textContent = 'loading more...';
+                    await loadNextMfgCompaniesPage();
+                    filterManufacturers();
+                });
+            });
         });
     });
+}
+
+async function fetchCompanyDetails(companyId) {
+    if (companyDetailsCache.has(companyId)) {
+        return companyDetailsCache.get(companyId);
+    }
+
+    try {
+        const response = await fetch(`/api/company-details?id=${encodeURIComponent(String(companyId))}`);
+        if (!response.ok) {
+            return null;
+        }
+
+        const payload = await response.json();
+        if (!payload || !payload.company) {
+            return null;
+        }
+
+        companyDetailsCache.set(companyId, payload.company);
+        return payload.company;
+    } catch (error) {
+        return null;
+    }
 }
 
 function compareManufacturers(a, b) {
@@ -1364,6 +1642,26 @@ function attachEventListeners() {
 
     treeViewBtn.addEventListener('click', () => switchView('tree'));
     graphViewBtn.addEventListener('click', () => switchView('graph'));
+    if (mapModeCategoriesBtn) {
+        mapModeCategoriesBtn.addEventListener('click', () => {
+            mapDisplayMode = 'categories';
+            mapModeCategoriesBtn.classList.add('active');
+            mapModeCompaniesBtn?.classList.remove('active');
+            if (currentView === 'graph') {
+                renderGraph(filteredManufacturers);
+            }
+        });
+    }
+    if (mapModeCompaniesBtn) {
+        mapModeCompaniesBtn.addEventListener('click', () => {
+            mapDisplayMode = 'companies';
+            mapModeCompaniesBtn.classList.add('active');
+            mapModeCategoriesBtn?.classList.remove('active');
+            if (currentView === 'graph') {
+                renderGraph(filteredManufacturers);
+            }
+        });
+    }
 
     chatSend.addEventListener('click', sendChatMessage);
     chatInput.addEventListener('keydown', (e) => {
@@ -1371,6 +1669,9 @@ function attachEventListeners() {
             e.preventDefault();
             sendChatMessage();
         }
+    });
+    chatInput.addEventListener('focus', () => {
+        setAssistantExpanded(true);
     });
 
     if (funFactTrigger) {
@@ -1388,6 +1689,21 @@ function attachEventListeners() {
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             closeMobileAssistantPanel();
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        if (isMobileViewport() || !assistantPanel) {
+            return;
+        }
+
+        const target = event.target;
+        if (!(target instanceof Node)) {
+            return;
+        }
+
+        if (!assistantPanel.contains(target)) {
+            setAssistantExpanded(false);
         }
     });
 
@@ -1464,14 +1780,26 @@ function closeMobileAssistantPanel() {
     }
 }
 
+function setAssistantExpanded(expanded) {
+    if (!assistantPanel || isMobileViewport()) {
+        return;
+    }
+
+    assistantPanel.classList.toggle('is-expanded', Boolean(expanded));
+}
+
 function switchView(view) {
     currentView = view;
+    document.body.classList.toggle('is-map-view', view === 'graph');
 
     if (view === 'tree') {
         treeViewBtn.classList.add('active');
         graphViewBtn.classList.remove('active');
         directoryGrid.style.display = 'block';
         graphContainer.style.display = 'none';
+        if (scrollStory) {
+            scrollStory.style.display = 'block';
+        }
         return;
     }
 
@@ -1479,22 +1807,21 @@ function switchView(view) {
     graphViewBtn.classList.add('active');
     directoryGrid.style.display = 'none';
     graphContainer.style.display = 'block';
+    if (scrollStory) {
+        scrollStory.style.display = 'block';
+    }
     renderGraph(filteredManufacturers);
 }
 
 function renderGraph(manufacturersToGraph) {
-    initializeUSMap();
-
-    if (!usMap || !markerLayer) {
-        return;
+    if (mapDisplayMode === 'categories') {
+        generateMapLegend(manufacturersToGraph);
+    } else {
+        generateMapLegend([]);
     }
 
-    markerLayer.clearLayers();
-
-    // Generate legend
-    generateMapLegend(manufacturersToGraph);
-
-    const bounds = [];
+    const pins = [];
+    const categoryBuckets = new Map();
 
     manufacturersToGraph.forEach(manufacturer => {
         const coordinates = getManufacturerCoordinates(manufacturer);
@@ -1507,38 +1834,50 @@ function renderGraph(manufacturersToGraph) {
         const markerColor = getCategoryColor(assignment);
         const categoryLabel = getMainCategoryLabel(assignment);
         const isActiveCategory = !activeMapCategory || categoryLabel === activeMapCategory;
+        if (!isActiveCategory) {
+            return;
+        }
 
-        const marker = L.circleMarker(coordinates, {
-            radius: isActiveCategory ? 6 : 4,
-            color: markerColor,
-            weight: 1,
-            fillColor: markerColor,
-            opacity: isActiveCategory ? 1 : 0.18,
-            fillOpacity: isActiveCategory ? 0.9 : 0.12
+        if (mapDisplayMode === 'categories') {
+            const stateLabel = manufacturer.location?.state || 'Unknown state';
+            const bucketKey = `${categoryLabel}|${stateLabel}`;
+            const bucket = categoryBuckets.get(bucketKey) || {
+                coordinates,
+                markerColor,
+                categoryLabel,
+                location: stateLabel,
+                count: 0
+            };
+            bucket.count += 1;
+            categoryBuckets.set(bucketKey, bucket);
+            return;
+        }
+
+        pins.push({
+            manufacturer,
+            coordinates,
+            markerColor,
+            categoryLabel,
+            location
         });
-
-        marker.bindPopup(`
-            <strong>${escapeHtml(manufacturer.name)}</strong><br>
-            ${escapeHtml(location || 'Location unavailable')}<br>
-            ${escapeHtml(categoryLabel)}<br>
-            ${escapeHtml(manufacturer.industry || 'Unknown industry')}
-        `);
-
-        markerLayer.addLayer(marker);
-        bounds.push(coordinates);
     });
 
-    if (bounds.length > 0) {
-        usMap.fitBounds(bounds, {
-            padding: [24, 24],
-            maxZoom: 8
-        });
-    } else {
-        usMap.setView(defaultUSView.center, defaultUSView.zoom);
+    if (mapDisplayMode === 'categories') {
+        pins.push(...Array.from(categoryBuckets.values()).map((bucket) => ({
+            manufacturer: {
+                name: `${bucket.categoryLabel} (${bucket.count.toLocaleString()})`
+            },
+            coordinates: bucket.coordinates,
+            markerColor: bucket.markerColor,
+            categoryLabel: bucket.categoryLabel,
+            location: bucket.location,
+            isCategoryAggregate: true,
+            count: bucket.count
+        })));
     }
 
-    // The map lives in a hidden container until tab switch; force a resize pass.
-    setTimeout(() => usMap.invalidateSize(), 0);
+    staticSvgRenderToken += 1;
+    renderStaticSvgMap(pins, staticSvgRenderToken);
 }
 
 function initializeUSMap() {
@@ -1549,15 +1888,232 @@ function initializeUSMap() {
     usMap = L.map(networkGraphEl, {
         center: defaultUSView.center,
         zoom: defaultUSView.zoom,
-        minZoom: 3
+        minZoom: 3,
+        zoomControl: true
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 18
-    }).addTo(usMap);
+    referenceLayer = L.layerGroup().addTo(usMap);
+    addReferenceMapChrome();
+    usMap.fitBounds(lower48Bounds, {
+        padding: [18, 18],
+        maxZoom: 5
+    });
 
     markerLayer = L.layerGroup().addTo(usMap);
+}
+
+async function renderStaticSvgMap(pins, renderToken) {
+    if (!networkGraphEl) {
+        return;
+    }
+
+    const width = Math.max(980, networkGraphEl.clientWidth || 980);
+    const height = Math.max(560, networkGraphEl.clientHeight || 560);
+    if (!window.d3 || !window.topojson) {
+        networkGraphEl.innerHTML = `<div class="map-fallback-message">Map geometry unavailable.</div>`;
+        return;
+    }
+
+    let usTopoJson;
+    try {
+        usTopoJson = await loadUsTopoJson();
+    } catch (error) {
+        networkGraphEl.innerHTML = `<div class="map-fallback-message">Unable to load map geometry.</div>`;
+        return;
+    }
+
+    if (renderToken !== staticSvgRenderToken) {
+        return;
+    }
+
+    const nation = window.topojson.feature(usTopoJson, usTopoJson.objects.nation);
+    const states = window.topojson.feature(usTopoJson, usTopoJson.objects.states);
+    const projection = window.d3.geoAlbersUsa().fitExtent([[16, 12], [width - 16, height - 12]], nation);
+    const geoPath = window.d3.geoPath(projection);
+
+    const statesMarkup = states.features.map((feature) => (
+        `<path d="${geoPath(feature)}" class="us-state-path"></path>`
+    )).join('');
+
+    const nationPath = geoPath(nation) || '';
+    if (mapDisplayMode === 'companies') {
+        networkGraphEl.innerHTML = `
+            <div class="map-canvas-wrap">
+                <svg class="us-static-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="U.S. map with all company pins">
+                    <rect x="0" y="0" width="${width}" height="${height}" fill="#f7f7f8"></rect>
+                    <path d="${nationPath}" class="us-nation-fill"></path>
+                    <g class="us-states-layer">${statesMarkup}</g>
+                </svg>
+                <canvas class="us-pins-canvas" width="${width}" height="${height}" aria-hidden="true"></canvas>
+            </div>
+        `;
+        renderCompanyPinsOnCanvas(pins, projection);
+        return;
+    }
+
+    const pinMarkup = pins.map((pin) => {
+        const projected = projection([pin.coordinates[1], pin.coordinates[0]]);
+        if (!projected) {
+            return '';
+        }
+
+        const radius = pin.isCategoryAggregate
+            ? Math.min(11, Math.max(3, Math.log10((pin.count || 1) + 1) * 2.1))
+            : 2.8;
+        const name = pin.manufacturer.name || '';
+        const details = pin.isCategoryAggregate
+            ? `${pin.location || ''} · ${pin.count || 0} companies`
+            : `${pin.location || 'Location unavailable'} · ${pin.categoryLabel}`;
+
+        return `<circle cx="${projected[0].toFixed(1)}" cy="${projected[1].toFixed(1)}" r="${radius.toFixed(1)}" fill="${pin.markerColor}" fill-opacity="0.78" class="us-pin" data-company-name="${escapeAttribute(name)}" data-company-location="${escapeAttribute(details)}" data-company-category="${escapeAttribute(pin.categoryLabel || '')}">
+            <title>${escapeHtml(name)} · ${escapeHtml(details)}</title>
+        </circle>`;
+    }).join('');
+
+    networkGraphEl.innerHTML = `
+        <svg class="us-static-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Static U.S. map with category pins">
+            <rect x="0" y="0" width="${width}" height="${height}" fill="#f7f7f8"></rect>
+            <path d="${nationPath}" class="us-nation-fill"></path>
+            <g class="us-states-layer">${statesMarkup}</g>
+            <g class="us-pins-layer">${pinMarkup}</g>
+        </svg>
+    `;
+
+    attachMapPinHoverTooltips();
+}
+
+function renderCompanyPinsOnCanvas(pins, projection) {
+    const canvas = networkGraphEl.querySelector('.us-pins-canvas');
+    if (!canvas || !projection) {
+        return;
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 0.55;
+    pins.forEach((pin) => {
+        const projected = projection([pin.coordinates[1], pin.coordinates[0]]);
+        if (!projected) {
+            return;
+        }
+        ctx.fillStyle = pin.markerColor;
+        ctx.fillRect(projected[0], projected[1], 1.6, 1.6);
+    });
+    ctx.globalAlpha = 1;
+}
+
+function attachMapPinHoverTooltips() {
+    if (!networkGraphEl) {
+        return;
+    }
+
+    let tooltip = networkGraphEl.querySelector('.map-pin-tooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.className = 'map-pin-tooltip';
+        tooltip.hidden = true;
+        networkGraphEl.appendChild(tooltip);
+    }
+
+    const showTooltip = (event) => {
+        const target = event.currentTarget;
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        const company = target.getAttribute('data-company-name') || 'Company';
+        const location = target.getAttribute('data-company-location') || '';
+        const category = target.getAttribute('data-company-category') || '';
+        tooltip.innerHTML = `
+            <strong>${escapeHtml(company)}</strong>
+            <span>${escapeHtml([location, category].filter(Boolean).join(' | '))}</span>
+        `;
+        tooltip.hidden = false;
+        positionMapTooltip(event, tooltip);
+    };
+
+    const moveTooltip = (event) => {
+        if (tooltip.hidden) {
+            return;
+        }
+        positionMapTooltip(event, tooltip);
+    };
+
+    const hideTooltip = () => {
+        tooltip.hidden = true;
+    };
+
+    networkGraphEl.querySelectorAll('.us-pin').forEach((pin) => {
+        pin.addEventListener('mouseenter', showTooltip);
+        pin.addEventListener('mousemove', moveTooltip);
+        pin.addEventListener('mouseleave', hideTooltip);
+    });
+}
+
+function positionMapTooltip(event, tooltip) {
+    const containerRect = networkGraphEl.getBoundingClientRect();
+    const offsetX = 12;
+    const offsetY = 12;
+    const left = event.clientX - containerRect.left + offsetX;
+    const top = event.clientY - containerRect.top + offsetY;
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+}
+
+async function loadUsTopoJson() {
+    if (!usTopoJsonPromise) {
+        usTopoJsonPromise = fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json')
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch US atlas: ${response.status}`);
+                }
+                return response.json();
+            });
+    }
+
+    return usTopoJsonPromise;
+}
+
+function addReferenceMapChrome() {
+    if (!usMap || !referenceLayer) {
+        return;
+    }
+
+    usMap.setMaxBounds([
+        [15, -170],
+        [72, -52]
+    ]);
+
+    L.rectangle(lower48Bounds, {
+        color: '#d0d5de',
+        weight: 1,
+        fillColor: '#f7f7f8',
+        fillOpacity: 1,
+        interactive: false
+    }).addTo(referenceLayer);
+
+    const latLines = [25, 30, 35, 40, 45, 50];
+    latLines.forEach((lat) => {
+        L.polyline([[lat, -126], [lat, -66]], {
+            color: '#e2e5ea',
+            weight: 1,
+            opacity: 1,
+            interactive: false
+        }).addTo(referenceLayer);
+    });
+
+    const lngLines = [-120, -110, -100, -90, -80, -70];
+    lngLines.forEach((lng) => {
+        L.polyline([[24, lng], [50, lng]], {
+            color: '#e8eaee',
+            weight: 1,
+            opacity: 1,
+            interactive: false
+        }).addTo(referenceLayer);
+    });
 }
 
 function getManufacturerCoordinates(manufacturer) {
@@ -1766,7 +2322,6 @@ function renderAssistantResults(items) {
         card.innerHTML = `
             <h3>${escapeHtml(name)}</h3>
             <p>${escapeHtml(details)}</p>
-            ${item.website ? `<a href="${escapeAttribute(item.website)}" target="_blank" rel="noopener">Open website</a>` : ''}
         `;
         list.appendChild(card);
     });
@@ -1829,6 +2384,117 @@ function nextLocalFunFact() {
     return manufacturingFunFacts[currentFunFactIndex];
 }
 
+function renderStoryPanels() {
+    if (hottestStartupsList) {
+        const startupRows = getHottestStartups(8);
+        hottestStartupsList.innerHTML = startupRows.map((company) => {
+            const location = formatLocation(company.location || {});
+            const websiteLink = company.website
+                ? `<a href="${escapeAttribute(company.website)}" target="_blank" rel="noopener">Website</a>`
+                : '<span class="story-link-muted">No website</span>';
+            const founded = company.founded ? `Founded ${escapeHtml(String(company.founded))}` : 'Founded n/a';
+            const employees = company.employees ? `Team ${escapeHtml(String(company.employees))}` : 'Team n/a';
+            return `
+                <li class="story-company-card">
+                    <div class="story-company-top">
+                        ${company.website
+                            ? `<a class="story-company-name" href="${escapeAttribute(company.website)}" target="_blank" rel="noopener">${escapeHtml(company.name)}</a>`
+                            : `<span class="story-company-name">${escapeHtml(company.name)}</span>`}
+                        <span class="story-company-industry">${escapeHtml(company.industry || 'Industrial')}</span>
+                    </div>
+                    <p class="story-company-description">${escapeHtml(company.description || 'No description available yet.')}</p>
+                    <div class="story-company-meta">
+                        <span>${escapeHtml(location || 'Location n/a')}</span>
+                        <span>${founded}</span>
+                        <span>${employees}</span>
+                    </div>
+                    <div class="story-company-links">${websiteLink}</div>
+                </li>
+            `;
+        }).join('');
+    }
+
+    if (peopleToFollowList) {
+        const builders = [
+            { handle: '@packyM', label: 'Packy McCormick', url: 'https://x.com/packyM' },
+            { handle: '@Austen', label: 'Austen Allred', url: 'https://x.com/Austen' },
+            { handle: '@turnercj', label: 'Turner Novak', url: 'https://x.com/turnercj' },
+            { handle: '@balajis', label: 'Balaji Srinivasan', url: 'https://x.com/balajis' },
+            { handle: '@dunkhippo33', label: 'Deedy Das', url: 'https://x.com/dunkhippo33' },
+            { handle: '@Farzyness', label: 'Farz', url: 'https://x.com/Farzyness' }
+        ];
+
+        peopleToFollowList.innerHTML = builders.map((person) => (
+            `<li class="story-profile-card">
+                <a class="story-profile-name" href="${escapeAttribute(person.url)}" target="_blank" rel="noopener">${escapeHtml(person.label)}</a>
+                <span class="story-profile-handle">${escapeHtml(person.handle)}</span>
+                <a class="story-profile-link" href="${escapeAttribute(person.url)}" target="_blank" rel="noopener">Open Profile</a>
+            </li>`
+        )).join('');
+    }
+}
+
+function getHottestStartups(limit) {
+    const ranked = manufacturers
+        .filter((company) => company && company.name)
+        .map((company) => ({
+            company,
+            score: (
+                (company.ycCompany ? 12 : 0) +
+                (company.ycBatch ? 6 : 0) +
+                (company.founded && Number(company.founded) >= 2018 ? 4 : 0)
+            )
+        }))
+        .sort((a, b) => {
+            if (b.score !== a.score) {
+                return b.score - a.score;
+            }
+            return String(b.company.founded || '').localeCompare(String(a.company.founded || ''));
+        })
+        .map((entry) => entry.company);
+
+    const seen = new Set();
+    const unique = [];
+    ranked.forEach((company) => {
+        const key = String(company.name || '').toLowerCase();
+        if (key && !seen.has(key)) {
+            seen.add(key);
+            unique.push(company);
+        }
+    });
+
+    return unique.slice(0, limit);
+}
+
+function initializeStoryObserver() {
+    if (!scrollStory || !('IntersectionObserver' in window)) {
+        return;
+    }
+
+    const steps = Array.from(scrollStory.querySelectorAll('.story-step'));
+    if (!steps.length) {
+        return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            if (!entry.isIntersecting) {
+                return;
+            }
+
+            steps.forEach((step) => step.classList.remove('active'));
+            entry.target.classList.add('active');
+
+            activeMapCategory = null;
+            renderGraph(filteredManufacturers);
+        });
+    }, {
+        threshold: 0.55
+    });
+
+    steps.forEach((step) => observer.observe(step));
+}
+
 function startAssistantConversation() {
     if (hasStartedAssistantConversation) {
         return;
@@ -1850,4 +2516,5 @@ function startAssistantConversation() {
     if (funFactCard) {
         funFactCard.classList.add('is-hidden');
     }
+    setAssistantExpanded(true);
 }

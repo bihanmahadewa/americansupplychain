@@ -3,4 +3,5 @@ node_modules/
 results/
 *.log
 manufacturers-found.json
+mfg-companies-import.json
 .aider*
