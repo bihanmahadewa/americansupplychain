@@ -599,6 +599,10 @@ let markerLayer = null;
 let referenceLayer = null;
 let vectorBaseLayer = null;
 let stateSvgRenderer = null;
+let pinCanvasLayer = null;
+let pinWebglState = null;
+let currentMapPins = [];
+let stateFeatureBounds = new Map();
 let mapMarkerRenderer = null;
 let activeMapCategory = null;
 let activeMapState = null;
@@ -829,6 +833,27 @@ const categoryColorPalette = [
     '#64B5CD',
     '#8C8C8C'
 ];
+
+const mapSectionColors = {
+    'Extraction': '#2563eb',
+    'Primary Processing': '#dc2626',
+    'Tooling': '#7c3aed',
+    'Advanced Materials': '#059669',
+    'Critical Fabrication': '#f59e0b',
+    'Forming': '#0891b2',
+    'Energy Systems': '#16a34a',
+    'Treatment': '#ea580c',
+    'Electronics': '#db2777',
+    'Joining + Assembly': '#4f46e5',
+    'Bio': '#65a30d',
+    'Systems Integration': '#0f766e',
+    'Quality + Validation': '#9333ea',
+    'Infra + Logistics': '#64748b',
+    'Enablers': '#111827',
+    'Other': '#94a3b8'
+};
+const mapCategoryOrder = Object.keys(mapSectionColors);
+const mapCategoryIndexByLabel = new Map(mapCategoryOrder.map((label, index) => [label, index]));
 
 const allUSStates = [
     'Alabama',
@@ -1718,13 +1743,6 @@ function clearFilters() {
     activeMapState = null;
     closeMapDetailPanel();
     clearMapSearchResults();
-    if (usMap) {
-        usMap.fitBounds(lower48Bounds, {
-            padding: [18, 18],
-            maxZoom: 5,
-            animate: true
-        });
-    }
     filterManufacturers();
 }
 
@@ -1823,14 +1841,6 @@ async function showSearchCompanyDetail(manufacturer) {
             Object.assign(manufacturer, details, { detailsLoaded: true });
             company = manufacturer;
         }
-    }
-
-    const coordinates = getManufacturerCoordinates(company);
-    if (coordinates && usMap) {
-        usMap.flyTo(coordinates, Math.max(usMap.getZoom(), 7.2), {
-            animate: true,
-            duration: 0.75
-        });
     }
 
     renderSearchCompanyDetail(company);
@@ -2150,32 +2160,39 @@ function buildMapPins(manufacturersToGraph) {
     const pins = [];
 
     manufacturersToGraph.forEach(manufacturer => {
-        const coordinates = getManufacturerCoordinates(manufacturer);
-        if (!coordinates) {
+        const pin = buildManufacturerMapPin(manufacturer);
+        if (!pin) {
             return;
         }
-
-        const assignment = manufacturerAssignments.get(manufacturer.id);
-        const categoryLabel = getMapCategoryLabel(assignment, manufacturer);
-        const stateLabel = manufacturer.location?.state || 'Unknown state';
-        if (activeMapCategory && categoryLabel !== activeMapCategory) {
-            return;
-        }
+        const stateLabel = pin.stateLabel;
         if (activeMapState && stateLabel !== activeMapState) {
             return;
         }
 
-        pins.push({
-            manufacturer,
-            coordinates,
-            markerColor: getCategoryColor(assignment, manufacturer),
-            categoryLabel,
-            stateLabel,
-            location: formatLocation(manufacturer.location)
-        });
+        pins.push(pin);
     });
 
     return pins;
+}
+
+function buildManufacturerMapPin(manufacturer) {
+    const assignment = manufacturerAssignments.get(manufacturer.id);
+    const categoryLabel = getMapCategoryLabel(assignment, manufacturer);
+    const stateLabel = manufacturer.location?.state || 'Unknown state';
+    const coordinates = getDisplayManufacturerCoordinates(manufacturer);
+
+    if (!coordinates) {
+        return null;
+    }
+
+    return {
+        manufacturer,
+        coordinates,
+        markerColor: getCategoryColor(assignment, manufacturer),
+        categoryLabel,
+        stateLabel,
+        location: formatLocation(manufacturer.location)
+    };
 }
 
 function buildAggregateMapPins(pins) {
@@ -2369,12 +2386,8 @@ function updateMapModeHint(mappableCount, renderedCount) {
         return;
     }
 
-    const drillLabel = {
-        national: 'state clusters',
-        state: 'regional clusters',
-        local: 'local clusters'
-    }[getMapDrillLevel()];
-    resultsCount.textContent = `${filteredManufacturers.length.toLocaleString()} matches | ${mappableCount.toLocaleString()} mappable | ${renderedCount.toLocaleString()} ${drillLabel} | click clusters to zoom`;
+    const highlightLabel = activeMapCategory ? ` | ${activeMapCategory} highlighted` : '';
+    resultsCount.textContent = `${filteredManufacturers.length.toLocaleString()} matches | ${mappableCount.toLocaleString()} tiny pins${highlightLabel}`;
 }
 
 function showMapDetailPanel(manufacturer) {
@@ -2448,67 +2461,15 @@ function renderGraph(manufacturersToGraph) {
     markerLayer.clearLayers();
 
     const pins = buildMapPins(manufacturersToGraph);
-    const visiblePins = buildAggregateMapPins(pins);
-    updateStateClusterStyles(visiblePins);
-
-    if (!shouldRenderClusterMarkers()) {
-        updateMapModeHint(pins.length, visiblePins.length);
-        return;
-    }
-
-    visiblePins.forEach((pin) => {
-        const marker = L.marker(pin.coordinates, {
-            icon: createClusterMarkerIcon(pin),
-            keyboard: false
-        });
-
-        marker.bindTooltip(getMapTooltipMarkup(pin), {
-            direction: 'top',
-            offset: [0, -8],
-            opacity: 0.96,
-            sticky: true
-        });
-
-        marker.on('click', () => {
-            drillIntoMapCluster(pin);
-        });
-
-        marker.addTo(markerLayer);
-    });
-
-    updateMapModeHint(pins.length, visiblePins.length);
+    currentMapPins = pins;
+    markPinWebglDataDirty();
+    updateStateClusterStyles();
+    redrawPinCanvasLayer();
+    updateMapModeHint(pins.length, pins.length);
 }
 
 function drillIntoMapCluster(pin) {
-    if (!usMap || !pin) {
-        return;
-    }
-
-    activeMapState = pin.stateLabel || activeMapState;
-    closeMapDetailPanel();
-
-    const currentZoom = usMap.getZoom();
-    if (pin.drillLevel === 'national') {
-        usMap.flyTo(pin.coordinates, Math.max(6.3, currentZoom + 1.6), {
-            animate: true,
-            duration: 0.85
-        });
-        return;
-    }
-
-    if (pin.drillLevel === 'state') {
-        usMap.flyTo(pin.coordinates, Math.max(8.1, currentZoom + 1.4), {
-            animate: true,
-            duration: 0.85
-        });
-        return;
-    }
-
-    showClusterDetailPanel(pin);
-    usMap.flyTo(pin.coordinates, Math.min(9.4, Math.max(currentZoom, 8.4)), {
-        animate: true,
-        duration: 0.5
-    });
+    return;
 }
 
 function showClusterDetailPanel(pin) {
@@ -2539,68 +2500,410 @@ function showClusterDetailPanel(pin) {
     }
 }
 
-function updateStateClusterStyles(visiblePins) {
-    currentStateClusterStyles = new Map();
-    const stateBuckets = new Map();
-
-    visiblePins.forEach((pin) => {
-        const stateKey = resolveStateKey(normalizeGeographyToken(pin.stateLabel));
-        if (!stateKey || !Array.isArray(pin.segments)) {
-            return;
-        }
-
-        const stateBucket = stateBuckets.get(stateKey) || {
-            count: 0,
-            segments: new Map()
-        };
-        stateBucket.count += pin.count;
-
-        pin.segments.forEach((segment) => {
-            const existingSegment = stateBucket.segments.get(segment.categoryLabel) || {
-                categoryLabel: segment.categoryLabel,
-                markerColor: segment.markerColor,
-                count: 0
-            };
-            existingSegment.count += segment.count;
-            stateBucket.segments.set(segment.categoryLabel, existingSegment);
-        });
-
-        stateBuckets.set(stateKey, stateBucket);
-    });
-
-    stateBuckets.forEach((bucket, stateKey) => {
-        const segments = Array.from(bucket.segments.values())
-            .sort((a, b) => b.count - a.count)
-            .map((segment) => ({
-                ...segment,
-                percent: segment.count / bucket.count
-            }));
-        const dominantSegment = segments[0];
-
-        if (dominantSegment) {
-            currentStateClusterStyles.set(stateKey, {
-                gradientId: `state-mix-${stateKey.replace(/[^a-z0-9]+/g, '-')}`,
-                strokeColor: dominantSegment.markerColor,
-                count: bucket.count,
-                segments
-            });
-        }
-    });
-
-    refreshVectorBaseMapStyles();
-    updateStateGradientDefinitions();
-}
-
-function shouldRenderClusterMarkers() {
-    return getMapDrillLevel() === 'local' && Boolean(normalizeSearchText(mapSearchInput?.value || ''));
-}
-
-function refreshVectorBaseMapStyles() {
-    if (!vectorBaseLayer) {
+function ensurePinCanvasLayer() {
+    if (pinCanvasLayer || !usMap || typeof L === 'undefined') {
         return;
     }
 
-    vectorBaseLayer.setStyle((feature) => getStateFeatureStyle(feature));
+    pinCanvasLayer = L.canvasLayer()
+        .delegate({
+            onDrawLayer: drawPinCanvasLayer,
+            onClickLayer: handlePinCanvasClick
+        })
+        .addTo(usMap);
+}
+
+function redrawPinCanvasLayer() {
+    ensurePinCanvasLayer();
+    if (pinCanvasLayer) {
+        pinCanvasLayer.needRedraw();
+    }
+}
+
+function markPinWebglDataDirty() {
+    if (pinWebglState) {
+        pinWebglState.needsDataUpload = true;
+    }
+}
+
+function drawPinCanvasLayer(info) {
+    const canvas = info.canvas;
+    if (!canvas || !usMap) {
+        return;
+    }
+
+    const state = getPinWebglState(canvas);
+    if (state?.gl) {
+        drawPinsWithWebgl(state, canvas);
+        return;
+    }
+
+    drawPinsWithCanvas2d(canvas);
+}
+
+function getPinWebglState(canvas) {
+    if (pinWebglState?.canvas === canvas) {
+        return pinWebglState;
+    }
+
+    const gl = canvas.getContext('webgl', {
+        alpha: true,
+        antialias: false,
+        depth: false,
+        stencil: false,
+        preserveDrawingBuffer: false
+    }) || canvas.getContext('experimental-webgl');
+
+    if (!gl) {
+        pinWebglState = { canvas, gl: null, needsDataUpload: true };
+        return pinWebglState;
+    }
+
+    const vertexShader = compilePinShader(gl, gl.VERTEX_SHADER, `
+        attribute vec2 a_lngLat;
+        attribute vec3 a_color;
+        attribute float a_category;
+
+        uniform vec2 u_pixelOrigin;
+        uniform vec2 u_canvasSize;
+        uniform float u_zoom;
+        uniform float u_pointSize;
+        uniform float u_activeCategory;
+
+        varying vec4 v_color;
+
+        const float PI = 3.141592653589793;
+
+        void main() {
+            float clampedLat = clamp(a_lngLat.y, -85.05112878, 85.05112878);
+            float sinLat = sin(clampedLat * PI / 180.0);
+            float worldSize = 256.0 * pow(2.0, u_zoom);
+            float x = ((a_lngLat.x + 180.0) / 360.0) * worldSize;
+            float y = (0.5 - log((1.0 + sinLat) / (1.0 - sinLat)) / (4.0 * PI)) * worldSize;
+            vec2 containerPoint = vec2(x, y) - u_pixelOrigin;
+            vec2 clipPoint = vec2(
+                (containerPoint.x / u_canvasSize.x) * 2.0 - 1.0,
+                1.0 - (containerPoint.y / u_canvasSize.y) * 2.0
+            );
+            bool highlighted = u_activeCategory < -0.5 || abs(a_category - u_activeCategory) < 0.5;
+            vec3 color = highlighted ? a_color : vec3(0.278, 0.341, 0.412);
+            float alpha = highlighted ? 0.9 : 0.1;
+
+            gl_Position = vec4(clipPoint, 0.0, 1.0);
+            gl_PointSize = highlighted ? u_pointSize : max(1.0, u_pointSize * 0.65);
+            v_color = vec4(color, alpha);
+        }
+    `);
+    const fragmentShader = compilePinShader(gl, gl.FRAGMENT_SHADER, `
+        precision mediump float;
+        varying vec4 v_color;
+
+        void main() {
+            vec2 pointCoord = gl_PointCoord - vec2(0.5);
+            if (dot(pointCoord, pointCoord) > 0.25) {
+                discard;
+            }
+            gl_FragColor = v_color;
+        }
+    `);
+    const program = linkPinProgram(gl, vertexShader, fragmentShader);
+    if (!program) {
+        pinWebglState = { canvas, gl: null, needsDataUpload: true };
+        return pinWebglState;
+    }
+
+    pinWebglState = {
+        canvas,
+        gl,
+        program,
+        count: 0,
+        needsDataUpload: true,
+        buffers: {
+            lngLat: gl.createBuffer(),
+            color: gl.createBuffer(),
+            category: gl.createBuffer()
+        },
+        attributes: {
+            lngLat: gl.getAttribLocation(program, 'a_lngLat'),
+            color: gl.getAttribLocation(program, 'a_color'),
+            category: gl.getAttribLocation(program, 'a_category')
+        },
+        uniforms: {
+            pixelOrigin: gl.getUniformLocation(program, 'u_pixelOrigin'),
+            canvasSize: gl.getUniformLocation(program, 'u_canvasSize'),
+            zoom: gl.getUniformLocation(program, 'u_zoom'),
+            pointSize: gl.getUniformLocation(program, 'u_pointSize'),
+            activeCategory: gl.getUniformLocation(program, 'u_activeCategory')
+        }
+    };
+
+    gl.disable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    return pinWebglState;
+}
+
+function compilePinShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.warn('Unable to compile WebGL pin shader.', gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+    }
+    return shader;
+}
+
+function linkPinProgram(gl, vertexShader, fragmentShader) {
+    if (!vertexShader || !fragmentShader) {
+        return null;
+    }
+
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.warn('Unable to link WebGL pin program.', gl.getProgramInfoLog(program));
+        return null;
+    }
+    return program;
+}
+
+function drawPinsWithWebgl(state, canvas) {
+    const gl = state.gl;
+    if (!gl || !state.program || !usMap) {
+        drawPinsWithCanvas2d(canvas);
+        return;
+    }
+
+    if (state.needsDataUpload) {
+        uploadPinWebglData(state);
+    }
+
+    const pointSize = usMap.getZoom() >= 7 ? 3.4 : usMap.getZoom() >= 5.5 ? 2.6 : 1.75;
+    const pixelOrigin = usMap.getPixelOrigin();
+
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(state.program);
+
+    bindPinAttribute(gl, state.buffers.lngLat, state.attributes.lngLat, 2);
+    bindPinAttribute(gl, state.buffers.color, state.attributes.color, 3);
+    bindPinAttribute(gl, state.buffers.category, state.attributes.category, 1);
+
+    gl.uniform2f(state.uniforms.pixelOrigin, pixelOrigin.x, pixelOrigin.y);
+    gl.uniform2f(state.uniforms.canvasSize, canvas.width, canvas.height);
+    gl.uniform1f(state.uniforms.zoom, usMap.getZoom());
+    gl.uniform1f(state.uniforms.pointSize, pointSize);
+    gl.uniform1f(state.uniforms.activeCategory, getActiveMapCategoryIndex());
+    gl.drawArrays(gl.POINTS, 0, state.count);
+}
+
+function uploadPinWebglData(state) {
+    const gl = state.gl;
+    const count = currentMapPins.length;
+    const lngLatData = new Float32Array(count * 2);
+    const colorData = new Float32Array(count * 3);
+    const categoryData = new Float32Array(count);
+
+    currentMapPins.forEach((pin, index) => {
+        lngLatData[index * 2] = pin.coordinates[1];
+        lngLatData[index * 2 + 1] = pin.coordinates[0];
+
+        const color = hexToRgbUnit(pin.markerColor);
+        colorData[index * 3] = color[0];
+        colorData[index * 3 + 1] = color[1];
+        colorData[index * 3 + 2] = color[2];
+
+        categoryData[index] = getMapCategoryIndex(pin.categoryLabel);
+    });
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.lngLat);
+    gl.bufferData(gl.ARRAY_BUFFER, lngLatData, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.color);
+    gl.bufferData(gl.ARRAY_BUFFER, colorData, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.category);
+    gl.bufferData(gl.ARRAY_BUFFER, categoryData, gl.STATIC_DRAW);
+
+    state.count = count;
+    state.needsDataUpload = false;
+}
+
+function bindPinAttribute(gl, buffer, attribute, size) {
+    if (attribute < 0) {
+        return;
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.enableVertexAttribArray(attribute);
+    gl.vertexAttribPointer(attribute, size, gl.FLOAT, false, 0, 0);
+}
+
+function getActiveMapCategoryIndex() {
+    return activeMapCategory ? getMapCategoryIndex(activeMapCategory) : -1;
+}
+
+function getMapCategoryIndex(categoryLabel) {
+    return mapCategoryIndexByLabel.get(categoryLabel) ?? mapCategoryIndexByLabel.get('Other') ?? -1;
+}
+
+function hexToRgbUnit(hexColor) {
+    const normalized = String(hexColor || '').replace('#', '');
+    if (!/^[0-9a-f]{6}$/i.test(normalized)) {
+        return [0.58, 0.64, 0.72];
+    }
+
+    const numeric = Number.parseInt(normalized, 16);
+    return [
+        ((numeric >> 16) & 255) / 255,
+        ((numeric >> 8) & 255) / 255,
+        (numeric & 255) / 255
+    ];
+}
+
+function drawPinsWithCanvas2d(canvas) {
+    const ctx = canvas.getContext('2d');
+    if (!ctx || !usMap) {
+        return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const zoom = usMap.getZoom();
+    const activeSize = zoom >= 7 ? 3 : zoom >= 5.5 ? 2.2 : 1.45;
+    const mutedSize = Math.max(1.4, activeSize * 0.65);
+
+    currentMapPins.forEach((pin) => {
+        const point = usMap.latLngToContainerPoint(pin.coordinates);
+        if (point.x < -2 || point.y < -2 || point.x > canvas.width + 2 || point.y > canvas.height + 2) {
+            return;
+        }
+
+        const isHighlighted = !activeMapCategory || pin.categoryLabel === activeMapCategory;
+        const size = isHighlighted ? activeSize : mutedSize;
+        const halfSize = size / 2;
+        ctx.globalAlpha = isHighlighted ? 0.92 : 0.14;
+        ctx.fillStyle = isHighlighted ? pin.markerColor : '#475569';
+        ctx.fillRect(point.x - halfSize, point.y - halfSize, size, size);
+    });
+
+    ctx.globalAlpha = 1;
+}
+
+async function handlePinCanvasClick(event) {
+    if (!usMap) {
+        return;
+    }
+
+    const containerPoint = usMap.mouseEventToContainerPoint(event);
+    const hit = findNearestCanvasPin(containerPoint);
+    if (hit) {
+        L.DomEvent.stop(event);
+        await showSearchCompanyDetail(hit.manufacturer);
+        return;
+    }
+
+    L.DomEvent.stop(event);
+}
+
+function findNearestCanvasPin(containerPoint) {
+    let nearestPin = null;
+    let nearestDistance = Infinity;
+    const maxDistance = usMap.getZoom() >= 7 ? 7 : 5;
+    const maxDistanceSquared = maxDistance * maxDistance;
+
+    currentMapPins.forEach((pin) => {
+        if (activeMapCategory && pin.categoryLabel !== activeMapCategory) {
+            return;
+        }
+
+        const point = usMap.latLngToContainerPoint(pin.coordinates);
+        const dx = point.x - containerPoint.x;
+        const dy = point.y - containerPoint.y;
+        const distance = dx * dx + dy * dy;
+        if (distance <= maxDistanceSquared && distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestPin = pin;
+        }
+    });
+
+    return nearestPin;
+}
+
+function zoomToNearestState(latLng) {
+    return;
+}
+
+function createLeafletCanvasLayerClass() {
+    if (typeof L === 'undefined' || L.canvasLayer) {
+        return;
+    }
+
+    L.CanvasLayer = L.Layer.extend({
+        initialize() {
+            this._delegate = null;
+        },
+        delegate(delegate) {
+            this._delegate = delegate;
+            return this;
+        },
+        onAdd(map) {
+            this._map = map;
+            this._canvas = L.DomUtil.create('canvas', 'leaflet-canvas-layer');
+            this._canvas.style.position = 'absolute';
+            this._canvas.style.pointerEvents = 'auto';
+            this._canvas.style.zIndex = '650';
+            const size = this._map.getSize();
+            this._canvas.width = size.x;
+            this._canvas.height = size.y;
+            map.getPanes().markerPane.appendChild(this._canvas);
+            map.on('resize viewreset zoomend', this.needRedraw, this);
+            L.DomEvent.on(this._canvas, 'click', this._handleClick, this);
+            this.needRedraw();
+        },
+        onRemove(map) {
+            map.off('resize viewreset zoomend', this.needRedraw, this);
+            L.DomEvent.off(this._canvas, 'click', this._handleClick, this);
+            L.DomUtil.remove(this._canvas);
+            this._canvas = null;
+        },
+        _handleClick(event) {
+            if (this._delegate?.onClickLayer) {
+                this._delegate.onClickLayer(event);
+            }
+        },
+        needRedraw() {
+            if (!this._map || !this._canvas) {
+                return;
+            }
+
+            const size = this._map.getSize();
+            const topLeft = this._map.containerPointToLayerPoint([0, 0]);
+            L.DomUtil.setPosition(this._canvas, topLeft);
+            this._canvas.width = size.x;
+            this._canvas.height = size.y;
+
+            if (this._delegate?.onDrawLayer) {
+                this._delegate.onDrawLayer({
+                    canvas: this._canvas,
+                    bounds: this._map.getBounds(),
+                    size,
+                    zoom: this._map.getZoom()
+                });
+            }
+        }
+    });
+
+    L.canvasLayer = () => new L.CanvasLayer();
+}
+
+function updateStateClusterStyles() {
+    currentStateClusterStyles = new Map();
+    refreshVectorBaseMapStyles();
 }
 
 function updateStateGradientDefinitions() {
@@ -2660,6 +2963,14 @@ function applyStateGradientFills() {
     });
 }
 
+function refreshVectorBaseMapStyles() {
+    if (!vectorBaseLayer) {
+        return;
+    }
+
+    vectorBaseLayer.setStyle((feature) => getStateFeatureStyle(feature));
+}
+
 function appendGradientStop(gradient, offset, color) {
     const stop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
     stop.setAttribute('offset', `${Math.round(offset * 1000) / 10}%`);
@@ -2672,6 +2983,7 @@ function initializeUSMap() {
         return;
     }
 
+    createLeafletCanvasLayerClass();
     mapMarkerRenderer = L.canvas({ padding: 0.35 });
     usMap = L.map(networkGraphEl, {
         center: defaultUSView.center,
@@ -2682,10 +2994,19 @@ function initializeUSMap() {
         scrollWheelZoom: false,
         doubleClickZoom: false,
         boxZoom: false,
+        dragging: false,
         keyboard: false,
         touchZoom: false,
+        inertia: false,
+        tap: false,
         preferCanvas: true
     });
+    usMap.dragging.disable();
+    usMap.touchZoom.disable();
+    usMap.doubleClickZoom.disable();
+    usMap.scrollWheelZoom.disable();
+    usMap.boxZoom.disable();
+    usMap.keyboard.disable();
 
     stateSvgRenderer = L.svg({ padding: 0.2 });
     referenceLayer = L.layerGroup().addTo(usMap);
@@ -2698,9 +3019,9 @@ function initializeUSMap() {
     });
 
     markerLayer = L.layerGroup().addTo(usMap);
-    usMap.on('zoomend moveend', () => {
+    usMap.on('resize viewreset zoomend', () => {
         if (currentView === 'graph') {
-            renderGraph(filteredManufacturers);
+            redrawPinCanvasLayer();
         }
     });
 }
@@ -2717,6 +3038,7 @@ async function addVectorBaseMap() {
         }
 
         const states = window.topojson.feature(usTopoJson, usTopoJson.objects.states);
+        stateFeatureBounds = buildStateFeatureBounds(states);
         vectorBaseLayer = L.geoJSON(states, {
             interactive: true,
             renderer: stateSvgRenderer,
@@ -2735,9 +3057,175 @@ async function addVectorBaseMap() {
         vectorBaseLayer.bringToBack();
         refreshVectorBaseMapStyles();
         updateStateGradientDefinitions();
+        if (currentView === 'graph') {
+            renderGraph(filteredManufacturers);
+        }
     } catch (error) {
         console.warn('Unable to load vector base map.', error);
     }
+}
+
+function buildStateFeatureBounds(states) {
+    const boundsByState = new Map();
+
+    states.features.forEach((feature) => {
+        const stateKey = getStateFeatureKey(feature);
+        const points = [];
+        collectFeatureCoordinates(feature.geometry?.coordinates, points);
+        if (!stateKey || !points.length) {
+            return;
+        }
+
+        const polygons = getFeaturePolygons(feature.geometry);
+        const lats = points.map((point) => point[1]);
+        const lngs = points.map((point) => point[0]);
+        const stateShape = {
+            minLat: Math.min(...lats),
+            maxLat: Math.max(...lats),
+            minLng: Math.min(...lngs),
+            maxLng: Math.max(...lngs),
+            polygons
+        };
+        boundsByState.set(stateKey, stateShape);
+    });
+
+    return boundsByState;
+}
+
+function getFeaturePolygons(geometry) {
+    if (!geometry?.coordinates) {
+        return [];
+    }
+
+    if (geometry.type === 'Polygon') {
+        return [geometry.coordinates];
+    }
+
+    if (geometry.type === 'MultiPolygon') {
+        return geometry.coordinates;
+    }
+
+    return [];
+}
+
+function buildStateScatterPool(stateKey, stateShape) {
+    const targetSize = getStateScatterPoolSize(stateKey);
+    const scatterPoints = [];
+    const maxAttempts = targetSize * 18;
+
+    for (let attempt = 0; attempt < maxAttempts && scatterPoints.length < targetSize; attempt += 1) {
+        const candidate = createStateScatterCandidate(stateKey, stateShape, attempt);
+        if (isPointInStateShape(candidate[1], candidate[0], stateShape.polygons)) {
+            scatterPoints.push(candidate);
+        }
+    }
+
+    return scatterPoints;
+}
+
+function getStateScatterPoolSize(stateKey) {
+    if (['california', 'texas', 'florida', 'new york', 'illinois', 'ohio', 'pennsylvania'].includes(stateKey)) {
+        return 3200;
+    }
+
+    if (['rhode island', 'delaware', 'connecticut', 'new jersey', 'massachusetts'].includes(stateKey)) {
+        return 900;
+    }
+
+    return 1800;
+}
+
+function createStateScatterCandidate(stateKey, stateShape, attempt) {
+    const random = createSeededRandom(hashString(`${stateKey}|scatter|${attempt}`));
+    const xSeed = random();
+    const ySeed = random();
+    const edgeSeed = Math.floor(random() * 4);
+    const inset = 0.045;
+    const bandDepth = 0.38;
+    const xRatio = inset + xSeed * (1 - inset * 2);
+    const yRatio = inset + ySeed * (1 - inset * 2);
+
+    if (edgeSeed === 0) {
+        return [
+            interpolate(stateShape.minLat, stateShape.maxLat, inset + ySeed * bandDepth),
+            interpolate(stateShape.minLng, stateShape.maxLng, xRatio)
+        ];
+    }
+
+    if (edgeSeed === 1) {
+        return [
+            interpolate(stateShape.minLat, stateShape.maxLat, yRatio),
+            interpolate(stateShape.minLng, stateShape.maxLng, 1 - inset - xSeed * bandDepth)
+        ];
+    }
+
+    if (edgeSeed === 2) {
+        return [
+            interpolate(stateShape.minLat, stateShape.maxLat, 1 - inset - ySeed * bandDepth),
+            interpolate(stateShape.minLng, stateShape.maxLng, xRatio)
+        ];
+    }
+
+    return [
+        interpolate(stateShape.minLat, stateShape.maxLat, yRatio),
+        interpolate(stateShape.minLng, stateShape.maxLng, inset + xSeed * bandDepth)
+    ];
+}
+
+function isPointInStateShape(lng, lat, polygons) {
+    return polygons.some((polygon) => {
+        const [outerRing, ...holes] = polygon;
+        return isPointInRing(lng, lat, outerRing) && !holes.some((ring) => isPointInRing(lng, lat, ring));
+    });
+}
+
+function createSeededRandom(seed) {
+    let value = seed >>> 0;
+    return () => {
+        value += 0x6D2B79F5;
+        let result = value;
+        result = Math.imul(result ^ (result >>> 15), result | 1);
+        result ^= result + Math.imul(result ^ (result >>> 7), result | 61);
+        return ((result ^ (result >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function isPointInRing(lng, lat, ring) {
+    if (!Array.isArray(ring) || ring.length < 3) {
+        return false;
+    }
+
+    let inside = false;
+    for (let current = 0, previous = ring.length - 1; current < ring.length; previous = current, current += 1) {
+        const currentLng = ring[current][0];
+        const currentLat = ring[current][1];
+        const previousLng = ring[previous][0];
+        const previousLat = ring[previous][1];
+        const crossesLatitude = currentLat > lat !== previousLat > lat;
+        if (!crossesLatitude) {
+            continue;
+        }
+
+        const intersectionLng = ((previousLng - currentLng) * (lat - currentLat)) / (previousLat - currentLat) + currentLng;
+        if (lng < intersectionLng) {
+            inside = !inside;
+        }
+    }
+
+    return inside;
+}
+
+function collectFeatureCoordinates(value, points) {
+    if (!Array.isArray(value)) {
+        return;
+    }
+
+    if (typeof value[0] === 'number' && typeof value[1] === 'number') {
+        points.push(value);
+        return;
+    }
+
+    value.forEach((entry) => collectFeatureCoordinates(entry, points));
 }
 
 function updateStateHoverTooltip(feature, layer, event) {
@@ -2766,64 +3254,25 @@ function getStateSegmentAtPointer(feature, layer, event) {
 }
 
 function getStateTooltipMarkup(feature, focusedSegment = null) {
-    const stateKey = getStateFeatureKey(feature);
-    const clusterStyle = currentStateClusterStyles.get(stateKey);
     const stateName = stateFipsNames[String(feature?.id || '').padStart(2, '0')] || 'State';
 
-    if (!clusterStyle) {
-        return `<strong>${escapeHtml(stateName)}</strong><span>No mapped companies in current view</span>`;
-    }
-
-    if (focusedSegment) {
-        return `
-            <strong>${escapeHtml(focusedSegment.categoryLabel)}</strong>
-            <span>${escapeHtml(stateName)} | ${focusedSegment.count.toLocaleString()} manufacturers | ${Math.round(focusedSegment.percent * 100)}%</span>
-            <span>Click to zoom into this state</span>
-        `;
-    }
-
-    const segments = clusterStyle.segments
-        .slice(0, 6)
-        .map((segment) => `${escapeHtml(segment.categoryLabel)}: ${Math.round(segment.percent * 100)}%`)
-        .join('<br>');
-
     return `
-        <strong>${escapeHtml(stateName)} | ${clusterStyle.count.toLocaleString()} manufacturers</strong>
-        <span>${segments}</span>
-        <span>Click to zoom into this state</span>
+        <strong>${escapeHtml(stateName)}</strong>
+        <span>Use filters or search to narrow companies</span>
     `;
 }
 
 function drillIntoStateFeature(feature) {
-    const stateKey = getStateFeatureKey(feature);
-    const clusterStyle = currentStateClusterStyles.get(stateKey);
-    if (!clusterStyle || !usMap) {
-        return;
-    }
-
-    const coordinates = stateCentroids[stateKey];
-    if (!coordinates) {
-        return;
-    }
-
-    activeMapState = stateFipsNames[String(feature?.id || '').padStart(2, '0')] || activeMapState;
-    closeMapDetailPanel();
-    usMap.flyTo(coordinates, 6.3, {
-        animate: true,
-        duration: 0.85
-    });
+    return;
 }
 
 function getStateFeatureStyle(feature) {
-    const stateKey = getStateFeatureKey(feature);
-    const clusterStyle = currentStateClusterStyles.get(stateKey);
-
     return {
-        color: clusterStyle?.strokeColor || '#9aa7b6',
-        weight: clusterStyle ? 1.25 : 1.15,
-        opacity: clusterStyle ? 0.58 : 0.9,
-        fillColor: clusterStyle?.gradientId ? `url(#${clusterStyle.gradientId})` : '#fbfcfe',
-        fillOpacity: clusterStyle ? 0.9 : 0.94
+        color: '#9aa7b6',
+        weight: 1.15,
+        opacity: 0.9,
+        fillColor: '#fbfcfe',
+        fillOpacity: 0.18
     };
 }
 
@@ -3052,6 +3501,80 @@ function getManufacturerCoordinates(manufacturer) {
     return null;
 }
 
+function getDisplayManufacturerCoordinates(manufacturer) {
+    const coordinates = getManufacturerCoordinates(manufacturer);
+    if (!coordinates) {
+        return null;
+    }
+
+    const rawState = normalizeGeographyToken(manufacturer.location?.state);
+    const stateKey = resolveStateKey(rawState);
+    const rawCity = normalizeGeographyToken(getPrimaryCityCandidate(manufacturer.location?.city));
+    const hasPreciseCity = Boolean(rawCity && stateKey && cityCoordinates[`${rawCity}|${stateKey}`]);
+    const hasExactGeo = Number.isFinite(Number(manufacturer.geo?.lat)) && Number.isFinite(Number(manufacturer.geo?.lon));
+
+    if (hasPreciseCity || hasExactGeo || !stateKey) {
+        return coordinates;
+    }
+
+    return scatterCoordinatesWithinState(coordinates, manufacturer.id || manufacturer.name, stateKey);
+}
+
+function scatterCoordinatesWithinState([lat, lng], seedValue, stateKey) {
+    const hash = hashString(`${seedValue}|${stateKey}`);
+    const bounds = stateFeatureBounds.get(stateKey);
+    if (bounds && !bounds.scatterPoints) {
+        bounds.scatterPoints = buildStateScatterPool(stateKey, bounds);
+    }
+
+    if (bounds?.scatterPoints?.length) {
+        return bounds.scatterPoints[hash % bounds.scatterPoints.length];
+    }
+
+    const angle = ((hash % 3600) / 3600) * Math.PI * 2;
+    const radiusSeed = (((hash >>> 8) % 1000) / 1000);
+    const radius = Math.sqrt(radiusSeed) * getStateScatterRadius(stateKey);
+    const latOffset = Math.sin(angle) * radius;
+    const lngOffset = Math.cos(angle) * radius * getLongitudeScatterScale(lat);
+    return [
+        lat + latOffset,
+        lng + lngOffset
+    ];
+}
+
+function interpolate(min, max, ratio) {
+    return min + (max - min) * ratio;
+}
+
+function getStateScatterRadius(stateKey) {
+    if (['rhode island', 'delaware', 'connecticut', 'new jersey', 'massachusetts'].includes(stateKey)) {
+        return 0.35;
+    }
+    if (['california', 'texas', 'montana', 'nevada', 'arizona', 'new mexico', 'alaska'].includes(stateKey)) {
+        return 2.3;
+    }
+    return 1.15;
+}
+
+function getLongitudeScatterScale(lat) {
+    const cosine = Math.cos((lat * Math.PI) / 180);
+    return cosine > 0.2 ? 1 / cosine : 1;
+}
+
+function hashString(value) {
+    return String(value || '').split('').reduce((hash, character) => (
+        (hash * 31 + character.charCodeAt(0)) >>> 0
+    ), 2166136261);
+}
+
+function toTitleCase(value) {
+    return String(value || '')
+        .split(' ')
+        .filter(Boolean)
+        .map((token) => `${token.charAt(0).toUpperCase()}${token.slice(1)}`)
+        .join(' ');
+}
+
 function getPrimaryCityCandidate(cityValue) {
     if (!cityValue) {
         return '';
@@ -3108,11 +3631,12 @@ function getMainCategoryLabel(assignment) {
 }
 
 function getMapCategoryLabel(assignment, manufacturer) {
-    return assignment?.subcategory || manufacturer?.industry || assignment?.section || 'Other';
+    return getMainCategoryLabel(assignment);
 }
 
 function getCategoryColor(assignment, manufacturer) {
-    return getIndustryColor(getMapCategoryLabel(assignment, manufacturer));
+    const categoryLabel = getMapCategoryLabel(assignment, manufacturer);
+    return mapSectionColors[categoryLabel] || getIndustryColor(categoryLabel);
 }
 
 function generateMapLegend(manufacturersToGraph) {
@@ -3123,9 +3647,6 @@ function generateMapLegend(manufacturersToGraph) {
     manufacturersToGraph.forEach(manufacturer => {
         const assignment = manufacturerAssignments.get(manufacturer.id);
         const categoryLabel = getMapCategoryLabel(assignment, manufacturer);
-        if (activeMapCategory && categoryLabel !== activeMapCategory) {
-            return;
-        }
         const color = getCategoryColor(assignment, manufacturer);
         categoryColors.set(categoryLabel, color);
     });
@@ -3138,10 +3659,10 @@ function generateMapLegend(manufacturersToGraph) {
     }
 
     mapLegend.innerHTML = `
-        <h3>Cluster Colors</h3>
-        <p class="legend-caption">Click a category, then click clusters to zoom from state to regional density.</p>
+        <h3>Pin Colors</h3>
+        <p class="legend-caption">Click a category to highlight matching pins.</p>
         <button class="legend-reset${activeMapCategory ? '' : ' is-active'}" type="button" data-category="">
-            Show all clusters
+            Show all pins
         </button>
         <div class="legend-items">
             ${sortedCategories.map(([category, color]) => `
@@ -3162,14 +3683,8 @@ function generateMapLegend(manufacturersToGraph) {
             const selectedCategory = element.getAttribute('data-category') || null;
             activeMapCategory = selectedCategory === activeMapCategory ? null : selectedCategory;
             activeMapState = null;
-            if (!activeMapCategory && usMap) {
-                usMap.fitBounds(lower48Bounds, {
-                    padding: [18, 18],
-                    maxZoom: 5,
-                    animate: true
-                });
-            }
             renderGraph(filteredManufacturers);
+            redrawPinCanvasLayer();
         });
     });
 }

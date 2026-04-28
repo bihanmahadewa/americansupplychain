@@ -2294,7 +2294,19 @@ body.is-map-view #networkGraph .leaflet-overlay-pane path {
 }
 
 body.is-map-view #networkGraph .leaflet-interactive {
-    cursor: pointer;
+    cursor: default;
+}
+
+.leaflet-canvas-layer {
+    cursor: default;
+    image-rendering: auto;
+    z-index: 650;
+}
+
+body.is-map-view #networkGraph .leaflet-grab,
+body.is-map-view #networkGraph .leaflet-dragging .leaflet-grab,
+body.is-map-view #networkGraph .leaflet-dragging .leaflet-grab .leaflet-interactive {
+    cursor: default;
 }
 
 .cluster-ring-icon {
