@@ -48,9 +48,6 @@
 <body>
     <div class="app-loading-overlay" id="appLoadingOverlay" aria-live="polite">
         <div class="app-loading-inner">
-            <div class="app-loading-flag-wrap" aria-hidden="true">
-                <img src="flag.png" alt="American flag" class="app-loading-flag">
-            </div>
             <p>Loading American Supply Chain...</p>
         </div>
     </div>
@@ -94,13 +91,13 @@
                     <div class="view-controls">
                         <button id="treeViewBtn" class="view-btn" type="button">List</button>
                         <button id="graphViewBtn" class="view-btn active" type="button">Map</button>
-                        <button id="mapModeCategoriesBtn" class="view-btn" type="button">Clusters</button>
-                        <button id="mapModeCompaniesBtn" class="view-btn active" type="button">Places</button>
                     </div>
 
                     <div class="results-info">
                         <span id="resultsCount">0 manufacturers indexed</span>
                     </div>
+
+                    <div class="map-search-results" id="mapSearchResults" hidden></div>
                 </section>
                 <div id="networkGraph" aria-label="Map of U.S. manufacturers"></div>
                 <aside class="map-detail-panel" id="mapDetailPanel" hidden aria-live="polite"></aside>

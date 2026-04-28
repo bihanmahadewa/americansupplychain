@@ -6,6 +6,7 @@ const directoryGrid = document.getElementById('directoryGrid');
 const graphContainer = document.getElementById('graphContainer');
 const networkGraphEl = document.getElementById('networkGraph');
 const mapSearchInput = document.getElementById('mapSearchInput');
+const mapSearchResults = document.getElementById('mapSearchResults');
 const mapDetailPanel = document.getElementById('mapDetailPanel');
 const resultsCount = document.getElementById('resultsCount');
 const suggestBtn = document.getElementById('suggestBtn');
@@ -592,12 +593,16 @@ const manufacturerImportKeys = new Set(manufacturers.map((manufacturer) => (
 
 let filteredManufacturers = [...manufacturers];
 let currentView = 'graph';
-let mapDisplayMode = 'companies';
+let mapDisplayMode = 'clusters';
 let usMap = null;
 let markerLayer = null;
 let referenceLayer = null;
+let vectorBaseLayer = null;
+let stateSvgRenderer = null;
 let mapMarkerRenderer = null;
 let activeMapCategory = null;
+let activeMapState = null;
+let currentStateClusterStyles = new Map();
 let markerAnimationTimer = null;
 let usTopoJsonPromise = null;
 let staticSvgRenderToken = 0;
@@ -693,6 +698,60 @@ const stateAliases = {
     nc: "north carolina", nd: "north dakota", oh: "ohio", ok: "oklahoma", or: "oregon", pa: "pennsylvania",
     ri: "rhode island", sc: "south carolina", sd: "south dakota", tn: "tennessee", tx: "texas", ut: "utah",
     vt: "vermont", va: "virginia", wa: "washington", wv: "west virginia", wi: "wisconsin", wy: "wyoming"
+};
+
+const stateFipsNames = {
+    "01": "Alabama",
+    "02": "Alaska",
+    "04": "Arizona",
+    "05": "Arkansas",
+    "06": "California",
+    "08": "Colorado",
+    "09": "Connecticut",
+    "10": "Delaware",
+    "11": "District of Columbia",
+    "12": "Florida",
+    "13": "Georgia",
+    "15": "Hawaii",
+    "16": "Idaho",
+    "17": "Illinois",
+    "18": "Indiana",
+    "19": "Iowa",
+    "20": "Kansas",
+    "21": "Kentucky",
+    "22": "Louisiana",
+    "23": "Maine",
+    "24": "Maryland",
+    "25": "Massachusetts",
+    "26": "Michigan",
+    "27": "Minnesota",
+    "28": "Mississippi",
+    "29": "Missouri",
+    "30": "Montana",
+    "31": "Nebraska",
+    "32": "Nevada",
+    "33": "New Hampshire",
+    "34": "New Jersey",
+    "35": "New Mexico",
+    "36": "New York",
+    "37": "North Carolina",
+    "38": "North Dakota",
+    "39": "Ohio",
+    "40": "Oklahoma",
+    "41": "Oregon",
+    "42": "Pennsylvania",
+    "44": "Rhode Island",
+    "45": "South Carolina",
+    "46": "South Dakota",
+    "47": "Tennessee",
+    "48": "Texas",
+    "49": "Utah",
+    "50": "Vermont",
+    "51": "Virginia",
+    "53": "Washington",
+    "54": "West Virginia",
+    "55": "Wisconsin",
+    "56": "Wyoming"
 };
 
 const cityCoordinates = {
@@ -1584,6 +1643,39 @@ function getManufacturerSearchText(manufacturer) {
     ].filter(Boolean).join(' '));
 }
 
+function getSearchTokens(value) {
+    return normalizeSearchText(value)
+        .split(' ')
+        .filter(Boolean)
+        .filter(token => ![
+            'a',
+            'an',
+            'and',
+            'co',
+            'company',
+            'companies',
+            'corp',
+            'find',
+            'for',
+            'inc',
+            'llc',
+            'manufacturer',
+            'manufacturers',
+            'manufacturing',
+            'the'
+        ].includes(token));
+}
+
+function matchesSearchQuery(manufacturer, searchQuery) {
+    const tokens = getSearchTokens(searchQuery);
+    if (!tokens.length) {
+        return true;
+    }
+
+    const searchable = getManufacturerSearchText(manufacturer);
+    return tokens.every(token => searchable.includes(token));
+}
+
 function filterManufacturers() {
     const selectedState = stateFilter.value;
     const selectedIndustry = industryFilter.value;
@@ -1592,7 +1684,7 @@ function filterManufacturers() {
     filteredManufacturers = manufacturers.filter(manufacturer => {
         const matchesState = selectedState === '' || manufacturer.location.state === selectedState;
         const matchesIndustry = selectedIndustry === '' || manufacturer.industry === selectedIndustry;
-        const matchesSearch = !searchQuery || getManufacturerSearchText(manufacturer).includes(searchQuery);
+        const matchesSearch = matchesSearchQuery(manufacturer, searchQuery);
 
         return matchesState && matchesIndustry && matchesSearch;
     });
@@ -1613,6 +1705,7 @@ function filterManufacturers() {
         renderGraph(filteredManufacturers);
     }
 
+    renderMapSearchResults();
 }
 
 function clearFilters() {
@@ -1622,8 +1715,172 @@ function clearFilters() {
         mapSearchInput.value = '';
     }
     activeMapCategory = null;
+    activeMapState = null;
     closeMapDetailPanel();
+    clearMapSearchResults();
+    if (usMap) {
+        usMap.fitBounds(lower48Bounds, {
+            padding: [18, 18],
+            maxZoom: 5,
+            animate: true
+        });
+    }
     filterManufacturers();
+}
+
+function renderMapSearchResults() {
+    if (!mapSearchResults || !mapSearchInput) {
+        return;
+    }
+
+    const query = mapSearchInput.value.trim();
+    if (!query) {
+        clearMapSearchResults();
+        return;
+    }
+
+    const visibleMatches = rankSearchResults(filteredManufacturers, query).slice(0, 30);
+    mapSearchResults.hidden = false;
+
+    if (!visibleMatches.length) {
+        mapSearchResults.innerHTML = `
+            <p class="map-search-empty">No matching companies yet.</p>
+        `;
+        return;
+    }
+
+    mapSearchResults.innerHTML = `
+        <div class="map-search-results-head">
+            <strong>${visibleMatches.length.toLocaleString()} shown</strong>
+            <span>${filteredManufacturers.length.toLocaleString()} matches</span>
+        </div>
+        <div class="map-search-result-list">
+            ${visibleMatches.map(renderMapSearchResultButton).join('')}
+        </div>
+    `;
+
+    mapSearchResults.querySelectorAll('[data-company-id]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const companyId = button.getAttribute('data-company-id');
+            const manufacturer = manufacturers.find((entry) => String(entry.id) === String(companyId));
+            if (manufacturer) {
+                await showSearchCompanyDetail(manufacturer);
+            }
+        });
+    });
+}
+
+function rankSearchResults(items, query) {
+    const normalizedQuery = normalizeSearchText(query);
+    return [...items].sort((a, b) => {
+        const aScore = getSearchResultScore(a, normalizedQuery);
+        const bScore = getSearchResultScore(b, normalizedQuery);
+        if (aScore !== bScore) {
+            return bScore - aScore;
+        }
+        return a.name.localeCompare(b.name);
+    });
+}
+
+function getSearchResultScore(manufacturer, normalizedQuery) {
+    const name = normalizeSearchText(manufacturer.name);
+    const industry = normalizeSearchText(manufacturer.industry);
+    const products = normalizeSearchText((manufacturer.products || []).join(' '));
+    let score = 0;
+
+    if (name === normalizedQuery) score += 100;
+    if (name.startsWith(normalizedQuery)) score += 60;
+    if (name.includes(normalizedQuery)) score += 35;
+    if (industry.includes(normalizedQuery)) score += 20;
+    if (products.includes(normalizedQuery)) score += 12;
+    if (manufacturer.description) score += 2;
+    if (manufacturer.website) score += 1;
+    return score;
+}
+
+function renderMapSearchResultButton(manufacturer) {
+    const location = formatLocation(manufacturer.location) || 'Location unavailable';
+    const description = manufacturer.description || (manufacturer.products || []).slice(0, 3).join(', ') || manufacturer.industry || 'Manufacturing company';
+
+    return `
+        <button class="map-search-result" type="button" data-company-id="${escapeAttribute(manufacturer.id)}">
+            <span class="map-search-result-title">${escapeHtml(manufacturer.name || 'Unnamed company')}</span>
+            <span class="map-search-result-meta">${escapeHtml([manufacturer.industry, location].filter(Boolean).join(' | '))}</span>
+            <span class="map-search-result-desc">${escapeHtml(description)}</span>
+        </button>
+    `;
+}
+
+async function showSearchCompanyDetail(manufacturer) {
+    if (!mapSearchResults || !manufacturer) {
+        return;
+    }
+
+    let company = manufacturer;
+    if (manufacturer.source === 'MFG Companies import' && !manufacturer.detailsLoaded) {
+        const details = await fetchCompanyDetails(manufacturer.id);
+        if (details) {
+            Object.assign(manufacturer, details, { detailsLoaded: true });
+            company = manufacturer;
+        }
+    }
+
+    const coordinates = getManufacturerCoordinates(company);
+    if (coordinates && usMap) {
+        usMap.flyTo(coordinates, Math.max(usMap.getZoom(), 7.2), {
+            animate: true,
+            duration: 0.75
+        });
+    }
+
+    renderSearchCompanyDetail(company);
+}
+
+function renderSearchCompanyDetail(manufacturer) {
+    const assignment = manufacturerAssignments.get(manufacturer.id);
+    const categoryLabel = getMainCategoryLabel(assignment);
+    const location = formatLocation(manufacturer.location) || 'Location unavailable';
+    const products = (manufacturer.products || []).filter(Boolean);
+    const website = manufacturer.website
+        ? `<a href="${escapeAttribute(manufacturer.website)}" target="_blank" rel="noopener">${escapeHtml(formatWebsiteLabel(manufacturer.website))}</a>`
+        : '<span>No website listed</span>';
+
+    mapSearchResults.hidden = false;
+    mapSearchResults.innerHTML = `
+        <article class="map-search-detail">
+            <button class="map-search-back" type="button">&larr; Results</button>
+            <p class="map-detail-kicker">${escapeHtml(categoryLabel)}</p>
+            <h2>${escapeHtml(manufacturer.name || 'Manufacturer')}</h2>
+            <p class="map-detail-location">${escapeHtml(location)}</p>
+            <p class="map-detail-description">${escapeHtml(manufacturer.description || 'No description available yet.')}</p>
+            <dl class="map-detail-list">
+                <div>
+                    <dt>Sector</dt>
+                    <dd>${escapeHtml(manufacturer.industry || 'Manufacturing')}</dd>
+                </div>
+                <div>
+                    <dt>Products</dt>
+                    <dd>${escapeHtml(products.length ? products.slice(0, 8).join(', ') : 'Not listed')}</dd>
+                </div>
+                <div>
+                    <dt>Website</dt>
+                    <dd>${website}</dd>
+                </div>
+            </dl>
+        </article>
+    `;
+
+    const backButton = mapSearchResults.querySelector('.map-search-back');
+    if (backButton) {
+        backButton.addEventListener('click', renderMapSearchResults);
+    }
+}
+
+function clearMapSearchResults() {
+    if (mapSearchResults) {
+        mapSearchResults.hidden = true;
+        mapSearchResults.innerHTML = '';
+    }
 }
 
 async function sendChatMessage() {
@@ -1704,6 +1961,7 @@ function attachEventListeners() {
             window.clearTimeout(mapSearchDebounceTimer);
             mapSearchDebounceTimer = window.setTimeout(() => {
                 activeMapCategory = null;
+                activeMapState = null;
                 closeMapDetailPanel();
                 filterManufacturers();
             }, 120);
@@ -1715,7 +1973,7 @@ function attachEventListeners() {
     graphViewBtn.addEventListener('click', () => switchView('graph'));
     if (mapModeCategoriesBtn) {
         mapModeCategoriesBtn.addEventListener('click', () => {
-            mapDisplayMode = 'categories';
+            mapDisplayMode = 'clusters';
             mapModeCategoriesBtn.classList.add('active');
             mapModeCompaniesBtn?.classList.remove('active');
             if (currentView === 'graph') {
@@ -1725,7 +1983,7 @@ function attachEventListeners() {
     }
     if (mapModeCompaniesBtn) {
         mapModeCompaniesBtn.addEventListener('click', () => {
-            mapDisplayMode = 'companies';
+            mapDisplayMode = 'clusters';
             mapModeCompaniesBtn.classList.add('active');
             mapModeCategoriesBtn?.classList.remove('active');
             if (currentView === 'graph') {
@@ -1898,16 +2156,21 @@ function buildMapPins(manufacturersToGraph) {
         }
 
         const assignment = manufacturerAssignments.get(manufacturer.id);
-        const categoryLabel = getMainCategoryLabel(assignment);
+        const categoryLabel = getMapCategoryLabel(assignment, manufacturer);
+        const stateLabel = manufacturer.location?.state || 'Unknown state';
         if (activeMapCategory && categoryLabel !== activeMapCategory) {
+            return;
+        }
+        if (activeMapState && stateLabel !== activeMapState) {
             return;
         }
 
         pins.push({
             manufacturer,
             coordinates,
-            markerColor: getCategoryColor(assignment),
+            markerColor: getCategoryColor(assignment, manufacturer),
             categoryLabel,
+            stateLabel,
             location: formatLocation(manufacturer.location)
         });
     });
@@ -1915,61 +2178,163 @@ function buildMapPins(manufacturersToGraph) {
     return pins;
 }
 
-function shouldRenderIndividualMapPins(pinCount) {
-    const zoom = usMap?.getZoom() || defaultUSView.zoom;
-    const hasSearch = Boolean(normalizeSearchText(mapSearchInput?.value || ''));
-    const hasFilter = Boolean(stateFilter.value || industryFilter.value || activeMapCategory);
-
-    return zoom >= 7 || pinCount <= 900 || (hasSearch && pinCount <= 4000) || (hasFilter && zoom >= 6 && pinCount <= 5000);
-}
-
 function buildAggregateMapPins(pins) {
     const zoom = usMap?.getZoom() || defaultUSView.zoom;
+    const drillLevel = getMapDrillLevel();
     const buckets = new Map();
 
     pins.forEach((pin) => {
-        const key = mapDisplayMode === 'categories'
-            ? `${pin.categoryLabel}|${pin.manufacturer.location?.state || 'Unknown state'}`
-            : getSpatialBucketKey(pin.coordinates, zoom);
+        const stateLabel = pin.stateLabel || pin.manufacturer.location?.state || 'Unknown state';
+        const key = getClusterBucketKey(pin, drillLevel, zoom, stateLabel);
         const bucket = buckets.get(key) || {
-            coordinates: [0, 0],
+            coordinates: getInitialClusterCoordinates(pin, drillLevel, stateLabel),
+            coordinateTotals: [0, 0],
             markerColor: pin.markerColor,
-            categoryLabel: mapDisplayMode === 'categories' ? pin.categoryLabel : 'Manufacturers',
-            location: mapDisplayMode === 'categories'
-                ? pin.manufacturer.location?.state || 'Unknown state'
-                : 'Zoom in for individual places',
+            categoryLabel: activeMapCategory || 'Manufacturers',
+            stateLabel,
+            location: getClusterLocationLabel(drillLevel, stateLabel),
             count: 0,
+            segments: new Map(),
             samples: [],
-            isAggregate: true
+            isAggregate: true,
+            drillLevel
         };
 
-        bucket.coordinates[0] += pin.coordinates[0];
-        bucket.coordinates[1] += pin.coordinates[1];
+        bucket.coordinateTotals[0] += pin.coordinates[0];
+        bucket.coordinateTotals[1] += pin.coordinates[1];
         bucket.count += 1;
+        const segment = bucket.segments.get(pin.categoryLabel) || {
+            categoryLabel: pin.categoryLabel,
+            markerColor: pin.markerColor,
+            count: 0
+        };
+        segment.count += 1;
+        bucket.segments.set(pin.categoryLabel, segment);
         if (bucket.samples.length < 3) {
             bucket.samples.push(pin.manufacturer.name);
         }
         buckets.set(key, bucket);
     });
 
-    return Array.from(buckets.values()).map((bucket) => ({
-        ...bucket,
-        coordinates: [
-            bucket.coordinates[0] / bucket.count,
-            bucket.coordinates[1] / bucket.count
-        ]
-    }));
+    return Array.from(buckets.values()).map((bucket) => {
+        const useStateCentroid = bucket.drillLevel === 'national';
+        return {
+            ...bucket,
+            coordinates: useStateCentroid
+                ? bucket.coordinates
+                : [
+                    bucket.coordinateTotals[0] / bucket.count,
+                    bucket.coordinateTotals[1] / bucket.count
+                ],
+            segments: Array.from(bucket.segments.values())
+                .sort((a, b) => b.count - a.count)
+                .map((segment) => ({
+                    ...segment,
+                    percent: segment.count / bucket.count
+                }))
+        };
+    });
+}
+
+function getInitialClusterCoordinates(pin, drillLevel, stateLabel) {
+    if (drillLevel === 'national') {
+        const stateKey = resolveStateKey(normalizeGeographyToken(stateLabel));
+        if (stateKey && stateCentroids[stateKey]) {
+            return stateCentroids[stateKey];
+        }
+    }
+
+    return [...pin.coordinates];
+}
+
+function getMapDrillLevel() {
+    const zoom = usMap?.getZoom() || defaultUSView.zoom;
+    if (zoom >= 8) {
+        return 'local';
+    }
+    if (zoom >= 6) {
+        return 'state';
+    }
+    return 'national';
+}
+
+function getClusterBucketKey(pin, drillLevel, zoom, stateLabel) {
+    if (drillLevel === 'national') {
+        return stateLabel;
+    }
+
+    return `${stateLabel}|${getSpatialBucketKey(pin.coordinates, zoom)}`;
+}
+
+function getClusterLocationLabel(drillLevel, stateLabel) {
+    if (drillLevel === 'national') {
+        return stateLabel;
+    }
+
+    if (drillLevel === 'state') {
+        return `${stateLabel} region`;
+    }
+
+    return 'Local cluster';
 }
 
 function getSpatialBucketKey(coordinates, zoom) {
-    const cellSize = zoom <= 4 ? 2.8 : zoom <= 5 ? 1.35 : 0.62;
+    const cellSize = zoom >= 8 ? 0.26 : zoom >= 7 ? 0.42 : 0.78;
     const latBucket = Math.floor(coordinates[0] / cellSize);
     const lngBucket = Math.floor(coordinates[1] / cellSize);
     return `${latBucket}|${lngBucket}`;
 }
 
 function getAggregateMarkerRadius(count) {
-    return Math.min(26, Math.max(8, Math.log10((count || 1) + 1) * 8.5));
+    return Math.min(34, Math.max(9, Math.log10((count || 1) + 1) * 9.5));
+}
+
+function createClusterMarkerIcon(pin) {
+    const isNational = pin.drillLevel === 'national';
+    const radius = isNational ? 13 : getAggregateMarkerRadius(pin.count);
+    const size = Math.ceil(radius * 2 + 10);
+    const center = size / 2;
+    const dominantColor = getClusterDominantColor(pin);
+
+    return L.divIcon({
+        className: 'cluster-ring-icon',
+        iconSize: [size, size],
+        iconAnchor: [center, center],
+        html: `
+            <svg class="cluster-ring-svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true">
+                <circle cx="${center}" cy="${center}" r="${radius + 3}" fill="#ffffff" fill-opacity="0.92"></circle>
+                <circle cx="${center}" cy="${center}" r="${radius}" fill="${escapeAttribute(lightenColor(dominantColor, 0.58))}" fill-opacity="${isNational ? '0.32' : '0.74'}" stroke="${escapeAttribute(dominantColor)}" stroke-width="${isNational ? '2.2' : '2.8'}"></circle>
+                <circle cx="${center}" cy="${center}" r="${Math.max(5, radius * 0.48)}" fill="#ffffff" fill-opacity="0.9"></circle>
+                <text x="${center}" y="${center}" text-anchor="middle" dominant-baseline="central">${formatClusterCount(pin.count)}</text>
+            </svg>
+        `
+    });
+}
+
+function getClusterDominantColor(pin) {
+    return pin.segments?.[0]?.markerColor || pin.markerColor || '#56B4E9';
+}
+
+function lightenColor(hexColor, amount = 0.62) {
+    const normalized = String(hexColor || '').replace('#', '');
+    if (!/^[0-9a-f]{6}$/i.test(normalized)) {
+        return '#dbeafe';
+    }
+
+    const numeric = Number.parseInt(normalized, 16);
+    const r = (numeric >> 16) & 255;
+    const g = (numeric >> 8) & 255;
+    const b = numeric & 255;
+    const lighten = (channel) => Math.round(channel + (255 - channel) * amount);
+    return `rgb(${lighten(r)}, ${lighten(g)}, ${lighten(b)})`;
+}
+
+function formatClusterCount(count) {
+    if (count >= 1000) {
+        return `${Math.round(count / 1000)}k`;
+    }
+
+    return String(count);
 }
 
 function getMapTooltipMarkup(pin) {
@@ -1977,10 +2342,18 @@ function getMapTooltipMarkup(pin) {
         const samples = pin.samples?.length
             ? `<span>${escapeHtml(pin.samples.join(', '))}</span>`
             : '';
+        const topSegments = pin.segments?.slice(0, 3).map((segment) => (
+            `${segment.categoryLabel} ${Math.round(segment.percent * 100)}%`
+        )).join(' | ');
+        const action = pin.drillLevel === 'local'
+            ? 'Click to inspect nearby manufacturers'
+            : 'Click to zoom into this cluster';
         return `
             <strong>${pin.count.toLocaleString()} manufacturers</strong>
-            <span>${escapeHtml(pin.categoryLabel)} | ${escapeHtml(pin.location)}</span>
+            <span>${escapeHtml(pin.location)}</span>
+            ${topSegments ? `<span>${escapeHtml(topSegments)}</span>` : ''}
             ${samples}
+            <span>${escapeHtml(action)}</span>
         `;
     }
 
@@ -1991,15 +2364,17 @@ function getMapTooltipMarkup(pin) {
     `;
 }
 
-function updateMapModeHint(showingPlaces, mappableCount, renderedCount) {
+function updateMapModeHint(mappableCount, renderedCount) {
     if (!resultsCount) {
         return;
     }
 
-    const visibleLabel = showingPlaces
-        ? `${renderedCount.toLocaleString()} places shown`
-        : `${renderedCount.toLocaleString()} clusters shown`;
-    resultsCount.textContent = `${filteredManufacturers.length.toLocaleString()} matches | ${mappableCount.toLocaleString()} mappable | ${visibleLabel}`;
+    const drillLabel = {
+        national: 'state clusters',
+        state: 'regional clusters',
+        local: 'local clusters'
+    }[getMapDrillLevel()];
+    resultsCount.textContent = `${filteredManufacturers.length.toLocaleString()} matches | ${mappableCount.toLocaleString()} mappable | ${renderedCount.toLocaleString()} ${drillLabel} | click clusters to zoom`;
 }
 
 function showMapDetailPanel(manufacturer) {
@@ -2073,18 +2448,18 @@ function renderGraph(manufacturersToGraph) {
     markerLayer.clearLayers();
 
     const pins = buildMapPins(manufacturersToGraph);
-    const shouldRenderPlaces = mapDisplayMode === 'companies' && shouldRenderIndividualMapPins(pins.length);
-    const visiblePins = shouldRenderPlaces ? pins : buildAggregateMapPins(pins);
+    const visiblePins = buildAggregateMapPins(pins);
+    updateStateClusterStyles(visiblePins);
+
+    if (!shouldRenderClusterMarkers()) {
+        updateMapModeHint(pins.length, visiblePins.length);
+        return;
+    }
 
     visiblePins.forEach((pin) => {
-        const isAggregate = Boolean(pin.isAggregate);
-        const marker = L.circleMarker(pin.coordinates, {
-            renderer: mapMarkerRenderer,
-            radius: isAggregate ? getAggregateMarkerRadius(pin.count) : 5,
-            color: '#ffffff',
-            weight: isAggregate ? 1.5 : 1,
-            fillColor: pin.markerColor,
-            fillOpacity: isAggregate ? 0.82 : 0.74
+        const marker = L.marker(pin.coordinates, {
+            icon: createClusterMarkerIcon(pin),
+            keyboard: false
         });
 
         marker.bindTooltip(getMapTooltipMarkup(pin), {
@@ -2095,21 +2470,201 @@ function renderGraph(manufacturersToGraph) {
         });
 
         marker.on('click', () => {
-            if (isAggregate) {
-                const nextZoom = Math.min(usMap.getMaxZoom(), Math.max(usMap.getZoom() + 2, 6));
-                usMap.setView(pin.coordinates, nextZoom, { animate: true });
-                closeMapDetailPanel();
-                return;
-            }
-
-            showMapDetailPanel(pin.manufacturer);
-            usMap.panTo(pin.coordinates, { animate: true });
+            drillIntoMapCluster(pin);
         });
 
         marker.addTo(markerLayer);
     });
 
-    updateMapModeHint(shouldRenderPlaces, pins.length, visiblePins.length);
+    updateMapModeHint(pins.length, visiblePins.length);
+}
+
+function drillIntoMapCluster(pin) {
+    if (!usMap || !pin) {
+        return;
+    }
+
+    activeMapState = pin.stateLabel || activeMapState;
+    closeMapDetailPanel();
+
+    const currentZoom = usMap.getZoom();
+    if (pin.drillLevel === 'national') {
+        usMap.flyTo(pin.coordinates, Math.max(6.3, currentZoom + 1.6), {
+            animate: true,
+            duration: 0.85
+        });
+        return;
+    }
+
+    if (pin.drillLevel === 'state') {
+        usMap.flyTo(pin.coordinates, Math.max(8.1, currentZoom + 1.4), {
+            animate: true,
+            duration: 0.85
+        });
+        return;
+    }
+
+    showClusterDetailPanel(pin);
+    usMap.flyTo(pin.coordinates, Math.min(9.4, Math.max(currentZoom, 8.4)), {
+        animate: true,
+        duration: 0.5
+    });
+}
+
+function showClusterDetailPanel(pin) {
+    if (!mapDetailPanel || !pin) {
+        return;
+    }
+
+    mapDetailPanel.innerHTML = `
+        <button class="map-detail-close" type="button" aria-label="Close cluster details">&times;</button>
+        <p class="map-detail-kicker">${escapeHtml(pin.categoryLabel || 'Manufacturers')}</p>
+        <h2>${pin.count.toLocaleString()} manufacturers</h2>
+        <p class="map-detail-location">${escapeHtml(pin.location || pin.stateLabel || 'U.S. cluster')}</p>
+        <p class="map-detail-description">This cluster groups nearby companies in the selected category. Use search or filters to narrow to specific names.</p>
+        ${pin.samples?.length ? `
+            <dl class="map-detail-list">
+                <div>
+                    <dt>Examples</dt>
+                    <dd>${escapeHtml(pin.samples.join(', '))}</dd>
+                </div>
+            </dl>
+        ` : ''}
+    `;
+    mapDetailPanel.hidden = false;
+
+    const closeButton = mapDetailPanel.querySelector('.map-detail-close');
+    if (closeButton) {
+        closeButton.addEventListener('click', closeMapDetailPanel);
+    }
+}
+
+function updateStateClusterStyles(visiblePins) {
+    currentStateClusterStyles = new Map();
+    const stateBuckets = new Map();
+
+    visiblePins.forEach((pin) => {
+        const stateKey = resolveStateKey(normalizeGeographyToken(pin.stateLabel));
+        if (!stateKey || !Array.isArray(pin.segments)) {
+            return;
+        }
+
+        const stateBucket = stateBuckets.get(stateKey) || {
+            count: 0,
+            segments: new Map()
+        };
+        stateBucket.count += pin.count;
+
+        pin.segments.forEach((segment) => {
+            const existingSegment = stateBucket.segments.get(segment.categoryLabel) || {
+                categoryLabel: segment.categoryLabel,
+                markerColor: segment.markerColor,
+                count: 0
+            };
+            existingSegment.count += segment.count;
+            stateBucket.segments.set(segment.categoryLabel, existingSegment);
+        });
+
+        stateBuckets.set(stateKey, stateBucket);
+    });
+
+    stateBuckets.forEach((bucket, stateKey) => {
+        const segments = Array.from(bucket.segments.values())
+            .sort((a, b) => b.count - a.count)
+            .map((segment) => ({
+                ...segment,
+                percent: segment.count / bucket.count
+            }));
+        const dominantSegment = segments[0];
+
+        if (dominantSegment) {
+            currentStateClusterStyles.set(stateKey, {
+                gradientId: `state-mix-${stateKey.replace(/[^a-z0-9]+/g, '-')}`,
+                strokeColor: dominantSegment.markerColor,
+                count: bucket.count,
+                segments
+            });
+        }
+    });
+
+    refreshVectorBaseMapStyles();
+    updateStateGradientDefinitions();
+}
+
+function shouldRenderClusterMarkers() {
+    return getMapDrillLevel() === 'local' && Boolean(normalizeSearchText(mapSearchInput?.value || ''));
+}
+
+function refreshVectorBaseMapStyles() {
+    if (!vectorBaseLayer) {
+        return;
+    }
+
+    vectorBaseLayer.setStyle((feature) => getStateFeatureStyle(feature));
+}
+
+function updateStateGradientDefinitions() {
+    const svg = networkGraphEl?.querySelector('.leaflet-overlay-pane svg');
+    if (!svg) {
+        return;
+    }
+
+    let defs = svg.querySelector('defs');
+    if (!defs) {
+        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        svg.insertBefore(defs, svg.firstChild);
+    }
+
+    defs.querySelectorAll('[id^="state-mix-"]').forEach((node) => node.remove());
+
+    currentStateClusterStyles.forEach((style) => {
+        if (!style.gradientId || !Array.isArray(style.segments)) {
+            return;
+        }
+
+        const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
+        gradient.setAttribute('id', style.gradientId);
+        gradient.setAttribute('cx', '50%');
+        gradient.setAttribute('cy', '50%');
+        gradient.setAttribute('r', '75%');
+        gradient.setAttribute('fx', '42%');
+        gradient.setAttribute('fy', '38%');
+
+        let offset = 0;
+        style.segments.forEach((segment) => {
+            const start = offset;
+            const end = Math.min(1, offset + segment.percent);
+            const color = lightenColor(segment.markerColor, 0.48);
+            appendGradientStop(gradient, start, color);
+            appendGradientStop(gradient, end, color);
+            offset = end;
+        });
+
+        defs.appendChild(gradient);
+    });
+
+    applyStateGradientFills();
+}
+
+function applyStateGradientFills() {
+    if (!vectorBaseLayer) {
+        return;
+    }
+
+    vectorBaseLayer.eachLayer((layer) => {
+        const stateKey = getStateFeatureKey(layer.feature);
+        const clusterStyle = currentStateClusterStyles.get(stateKey);
+        if (clusterStyle?.gradientId && layer._path) {
+            layer._path.setAttribute('fill', `url(#${clusterStyle.gradientId})`);
+        }
+    });
+}
+
+function appendGradientStop(gradient, offset, color) {
+    const stop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop.setAttribute('offset', `${Math.round(offset * 1000) / 10}%`);
+    stop.setAttribute('stop-color', color);
+    gradient.appendChild(stop);
 }
 
 function initializeUSMap() {
@@ -2123,20 +2678,24 @@ function initializeUSMap() {
         zoom: defaultUSView.zoom,
         minZoom: 3,
         maxZoom: 12,
-        zoomControl: true,
+        zoomControl: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false,
+        touchZoom: false,
         preferCanvas: true
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 19
-    }).addTo(usMap);
+    stateSvgRenderer = L.svg({ padding: 0.2 });
+    referenceLayer = L.layerGroup().addTo(usMap);
+    addReferenceMapChrome();
+    addVectorBaseMap();
 
     usMap.fitBounds(lower48Bounds, {
         padding: [18, 18],
         maxZoom: 5
     });
-    usMap.zoomControl.setPosition('bottomright');
 
     markerLayer = L.layerGroup().addTo(usMap);
     usMap.on('zoomend moveend', () => {
@@ -2144,6 +2703,134 @@ function initializeUSMap() {
             renderGraph(filteredManufacturers);
         }
     });
+}
+
+async function addVectorBaseMap() {
+    if (!usMap || !window.topojson) {
+        return;
+    }
+
+    try {
+        const usTopoJson = await loadUsTopoJson();
+        if (!usMap || vectorBaseLayer) {
+            return;
+        }
+
+        const states = window.topojson.feature(usTopoJson, usTopoJson.objects.states);
+        vectorBaseLayer = L.geoJSON(states, {
+            interactive: true,
+            renderer: stateSvgRenderer,
+            style: getStateFeatureStyle,
+            onEachFeature: (feature, layer) => {
+                layer.bindTooltip(() => getStateTooltipMarkup(feature), {
+                    direction: 'top',
+                    opacity: 0.96,
+                    sticky: true
+                });
+                layer.on('mousemove', (event) => updateStateHoverTooltip(feature, layer, event));
+                layer.on('mouseout', () => layer.setTooltipContent(getStateTooltipMarkup(feature)));
+                layer.on('click', () => drillIntoStateFeature(feature));
+            }
+        }).addTo(usMap);
+        vectorBaseLayer.bringToBack();
+        refreshVectorBaseMapStyles();
+        updateStateGradientDefinitions();
+    } catch (error) {
+        console.warn('Unable to load vector base map.', error);
+    }
+}
+
+function updateStateHoverTooltip(feature, layer, event) {
+    const segment = getStateSegmentAtPointer(feature, layer, event);
+    layer.setTooltipContent(getStateTooltipMarkup(feature, segment));
+}
+
+function getStateSegmentAtPointer(feature, layer, event) {
+    const stateKey = getStateFeatureKey(feature);
+    const clusterStyle = currentStateClusterStyles.get(stateKey);
+    if (!clusterStyle?.segments?.length || !layer?._path || !event?.originalEvent) {
+        return null;
+    }
+
+    const bounds = layer._path.getBoundingClientRect();
+    if (!bounds.width) {
+        return null;
+    }
+
+    const ratio = Math.min(0.999, Math.max(0, (event.originalEvent.clientX - bounds.left) / bounds.width));
+    let cumulative = 0;
+    return clusterStyle.segments.find((segment) => {
+        cumulative += segment.percent;
+        return ratio <= cumulative;
+    }) || clusterStyle.segments[clusterStyle.segments.length - 1];
+}
+
+function getStateTooltipMarkup(feature, focusedSegment = null) {
+    const stateKey = getStateFeatureKey(feature);
+    const clusterStyle = currentStateClusterStyles.get(stateKey);
+    const stateName = stateFipsNames[String(feature?.id || '').padStart(2, '0')] || 'State';
+
+    if (!clusterStyle) {
+        return `<strong>${escapeHtml(stateName)}</strong><span>No mapped companies in current view</span>`;
+    }
+
+    if (focusedSegment) {
+        return `
+            <strong>${escapeHtml(focusedSegment.categoryLabel)}</strong>
+            <span>${escapeHtml(stateName)} | ${focusedSegment.count.toLocaleString()} manufacturers | ${Math.round(focusedSegment.percent * 100)}%</span>
+            <span>Click to zoom into this state</span>
+        `;
+    }
+
+    const segments = clusterStyle.segments
+        .slice(0, 6)
+        .map((segment) => `${escapeHtml(segment.categoryLabel)}: ${Math.round(segment.percent * 100)}%`)
+        .join('<br>');
+
+    return `
+        <strong>${escapeHtml(stateName)} | ${clusterStyle.count.toLocaleString()} manufacturers</strong>
+        <span>${segments}</span>
+        <span>Click to zoom into this state</span>
+    `;
+}
+
+function drillIntoStateFeature(feature) {
+    const stateKey = getStateFeatureKey(feature);
+    const clusterStyle = currentStateClusterStyles.get(stateKey);
+    if (!clusterStyle || !usMap) {
+        return;
+    }
+
+    const coordinates = stateCentroids[stateKey];
+    if (!coordinates) {
+        return;
+    }
+
+    activeMapState = stateFipsNames[String(feature?.id || '').padStart(2, '0')] || activeMapState;
+    closeMapDetailPanel();
+    usMap.flyTo(coordinates, 6.3, {
+        animate: true,
+        duration: 0.85
+    });
+}
+
+function getStateFeatureStyle(feature) {
+    const stateKey = getStateFeatureKey(feature);
+    const clusterStyle = currentStateClusterStyles.get(stateKey);
+
+    return {
+        color: clusterStyle?.strokeColor || '#9aa7b6',
+        weight: clusterStyle ? 1.25 : 1.15,
+        opacity: clusterStyle ? 0.58 : 0.9,
+        fillColor: clusterStyle?.gradientId ? `url(#${clusterStyle.gradientId})` : '#fbfcfe',
+        fillOpacity: clusterStyle ? 0.9 : 0.94
+    };
+}
+
+function getStateFeatureKey(feature) {
+    const stateId = String(feature?.id || '').padStart(2, '0');
+    const fipsStateName = stateFipsNames[stateId] || '';
+    return normalizeGeographyToken(fipsStateName);
 }
 
 async function renderStaticSvgMap(pins, renderToken) {
@@ -2332,32 +3019,11 @@ function addReferenceMapChrome() {
     ]);
 
     L.rectangle(lower48Bounds, {
-        color: '#d0d5de',
-        weight: 1,
-        fillColor: '#f7f7f8',
-        fillOpacity: 1,
+        color: '#d7dde6',
+        weight: 0,
+        fillOpacity: 0,
         interactive: false
     }).addTo(referenceLayer);
-
-    const latLines = [25, 30, 35, 40, 45, 50];
-    latLines.forEach((lat) => {
-        L.polyline([[lat, -126], [lat, -66]], {
-            color: '#e2e5ea',
-            weight: 1,
-            opacity: 1,
-            interactive: false
-        }).addTo(referenceLayer);
-    });
-
-    const lngLines = [-120, -110, -100, -90, -80, -70];
-    lngLines.forEach((lng) => {
-        L.polyline([[24, lng], [50, lng]], {
-            color: '#e8eaee',
-            weight: 1,
-            opacity: 1,
-            interactive: false
-        }).addTo(referenceLayer);
-    });
 }
 
 function getManufacturerCoordinates(manufacturer) {
@@ -2441,8 +3107,12 @@ function getMainCategoryLabel(assignment) {
     return assignment?.section || 'Other';
 }
 
-function getCategoryColor(assignment) {
-    return getIndustryColor(getMainCategoryLabel(assignment));
+function getMapCategoryLabel(assignment, manufacturer) {
+    return assignment?.subcategory || manufacturer?.industry || assignment?.section || 'Other';
+}
+
+function getCategoryColor(assignment, manufacturer) {
+    return getIndustryColor(getMapCategoryLabel(assignment, manufacturer));
 }
 
 function generateMapLegend(manufacturersToGraph) {
@@ -2452,8 +3122,11 @@ function generateMapLegend(manufacturersToGraph) {
     const categoryColors = new Map();
     manufacturersToGraph.forEach(manufacturer => {
         const assignment = manufacturerAssignments.get(manufacturer.id);
-        const categoryLabel = getMainCategoryLabel(assignment);
-        const color = getCategoryColor(assignment);
+        const categoryLabel = getMapCategoryLabel(assignment, manufacturer);
+        if (activeMapCategory && categoryLabel !== activeMapCategory) {
+            return;
+        }
+        const color = getCategoryColor(assignment, manufacturer);
         categoryColors.set(categoryLabel, color);
     });
 
@@ -2465,10 +3138,10 @@ function generateMapLegend(manufacturersToGraph) {
     }
 
     mapLegend.innerHTML = `
-        <h3>Map Legend</h3>
-        <p class="legend-caption">Click a category to highlight only that group.</p>
+        <h3>Cluster Colors</h3>
+        <p class="legend-caption">Click a category, then click clusters to zoom from state to regional density.</p>
         <button class="legend-reset${activeMapCategory ? '' : ' is-active'}" type="button" data-category="">
-            Show all categories
+            Show all clusters
         </button>
         <div class="legend-items">
             ${sortedCategories.map(([category, color]) => `
@@ -2488,6 +3161,14 @@ function generateMapLegend(manufacturersToGraph) {
         element.addEventListener('click', () => {
             const selectedCategory = element.getAttribute('data-category') || null;
             activeMapCategory = selectedCategory === activeMapCategory ? null : selectedCategory;
+            activeMapState = null;
+            if (!activeMapCategory && usMap) {
+                usMap.fitBounds(lower48Bounds, {
+                    padding: [18, 18],
+                    maxZoom: 5,
+                    animate: true
+                });
+            }
             renderGraph(filteredManufacturers);
         });
     });
