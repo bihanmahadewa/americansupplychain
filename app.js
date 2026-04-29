@@ -602,9 +602,11 @@ let stateSvgRenderer = null;
 let pinCanvasLayer = null;
 let pinWebglState = null;
 let currentMapPins = [];
+let pinHitGrid = null;
 let stateFeatureBounds = new Map();
 let mapMarkerRenderer = null;
 let activeMapCategory = null;
+let activeMapSubcategory = null;
 let activeMapState = null;
 let currentStateClusterStyles = new Map();
 let markerAnimationTimer = null;
@@ -616,11 +618,23 @@ const companyDetailsCache = new Map();
 let mfgTotalAvailable = 0;
 let mfgLoadedCount = 0;
 let mfgLoadOffset = 0;
+let mfgMapPinRecords = [];
+let mfgMapPinStaticRows = null;
+let mfgMapPinsLoading = false;
+let mfgMapPinsLoaded = false;
 let mfgEnrichmentOverrides = {};
 let assistantPreviousResponseId = null;
 let assistantRequestInFlight = false;
 let hasStartedAssistantConversation = false;
 let currentFunFactIndex = -1;
+
+const MFG_INITIAL_PAGE_SIZE = 10000;
+const MFG_PAGE_SIZE = 10000;
+const MFG_MAP_PIN_PAGE_SIZE = 50000;
+const DETAIL_PIN_RENDER_LIMIT = 400000;
+const USE_WEBGL_PIN_LAYER = false;
+const CANVAS_PIN_HOVER_THROTTLE_MS = 32;
+const PIN_HIT_GRID_CELL_SIZE = 18;
 
 const manufacturingFunFacts = [
     'The Springfield Armory helped pioneer interchangeable parts manufacturing in the United States during the 19th century.',
@@ -852,7 +866,10 @@ const mapSectionColors = {
     'Enablers': '#111827',
     'Other': '#94a3b8'
 };
-const mapCategoryOrder = Object.keys(mapSectionColors);
+const mapCategoryOrder = [
+    ...tierTaxonomy.flatMap(tier => tier.sections.map(section => section.name)),
+    'Other'
+];
 const mapCategoryIndexByLabel = new Map(mapCategoryOrder.map((label, index) => [label, index]));
 
 const allUSStates = [
@@ -919,6 +936,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     filteredManufacturers = [...manufacturers];
     populateFilters();
     switchView('graph');
+    startMfgMapPinLoad();
     initializeFunFacts();
     renderStoryPanels();
     initializeStoryObserver();
@@ -969,22 +987,13 @@ async function loadIqsCompanies() {
 async function loadMfgCompanies() {
     try {
         await loadMfgEnrichmentOverrides();
-        const response = await fetch('mfg-companies-lite.json?v=20260425-1', { cache: 'no-store' });
-        if (!response.ok) {
+        const payload = await fetchMfgLitePage(0, MFG_INITIAL_PAGE_SIZE);
+        if (!payload?.rows?.length) {
             return;
         }
 
-        const rows = await response.json();
-        if (!Array.isArray(rows)) {
-            return;
-        }
-        mfgTotalAvailable = rows.length;
-        const records = rows.map((row) => ({
-            ...buildMfgRecordFromRow(row),
-            source: 'MFG Companies import',
-            sourceCategory: 'Bulk import lite',
-            detailsLoaded: Boolean(mfgEnrichmentOverrides[String(row?.[0])]?.description)
-        }));
+        mfgTotalAvailable = payload.total || payload.rows.length;
+        const records = payload.rows.map(buildMfgManufacturerRecord);
 
         if (!records.length) {
             return;
@@ -992,10 +1001,215 @@ async function loadMfgCompanies() {
 
         mergeImportedManufacturers(records);
         mfgLoadedCount = records.length;
-        mfgLoadOffset = records.length;
+        mfgLoadOffset = payload.offset + payload.rows.length;
     } catch (error) {
         console.warn('Unable to load MFG company imports.', error);
     }
+}
+
+async function loadNextMfgCompaniesPage() {
+    const payload = await fetchMfgLitePage(mfgLoadOffset, MFG_PAGE_SIZE);
+    if (!payload?.rows?.length) {
+        return;
+    }
+
+    const records = payload.rows.map(buildMfgManufacturerRecord);
+    mergeImportedManufacturers(records);
+    mfgTotalAvailable = payload.total || mfgTotalAvailable;
+    mfgLoadedCount += records.length;
+    mfgLoadOffset = payload.offset + payload.rows.length;
+}
+
+function startMfgMapPinLoad() {
+    if (mfgMapPinsLoading || mfgMapPinsLoaded) {
+        return;
+    }
+
+    mfgMapPinsLoading = true;
+    loadMfgMapPins()
+        .catch(error => {
+            console.warn('Unable to load full MFG map pins.', error);
+        })
+        .finally(() => {
+            mfgMapPinsLoading = false;
+            mfgMapPinsLoaded = true;
+            if (currentView === 'graph') {
+                renderGraph(filteredManufacturers);
+            }
+        });
+}
+
+async function loadMfgMapPins() {
+    let offset = 0;
+    let total = Infinity;
+    const records = [];
+
+    while (offset < total) {
+        const payload = await fetchMfgMapPinPage(offset, MFG_MAP_PIN_PAGE_SIZE);
+        if (!payload?.rows?.length) {
+            break;
+        }
+
+        payload.rows.forEach((row) => {
+            const record = buildMfgMapPinRecord(row);
+            if (record) {
+                records.push(record);
+            }
+        });
+
+        mfgMapPinRecords = records;
+        total = payload.total || records.length;
+        offset = payload.offset + payload.rows.length;
+
+        if (currentView === 'graph') {
+            renderGraph(filteredManufacturers);
+        }
+
+        await new Promise(resolve => window.setTimeout(resolve, 0));
+    }
+}
+
+async function fetchMfgMapPinPage(offset, limit) {
+    try {
+        const response = await fetch(`/api/mfg-map-pins?offset=${encodeURIComponent(String(offset))}&limit=${encodeURIComponent(String(limit))}`, {
+            cache: 'no-store'
+        });
+        if (response.ok) {
+            const payload = await response.json();
+            return {
+                rows: Array.isArray(payload.rows) ? payload.rows : [],
+                total: Number(payload.total || 0),
+                offset: Number(payload.offset || offset)
+            };
+        }
+    } catch (error) {
+        // Static-file fallback below keeps the map usable without the local API.
+    }
+
+    if (!mfgMapPinStaticRows) {
+        const response = await fetch('mfg-companies-lite.json?v=20260425-1', { cache: 'no-store' });
+        if (!response.ok) {
+            return { rows: [], total: 0, offset };
+        }
+        const rows = await response.json();
+        mfgMapPinStaticRows = Array.isArray(rows) ? rows : [];
+    }
+
+    return {
+        rows: mfgMapPinStaticRows
+            .slice(offset, offset + limit)
+            .map(row => [row?.[0], row?.[1] || '', row?.[2] || 'Manufacturing', row?.[3] || '', row?.[4] || '']),
+        total: mfgMapPinStaticRows.length,
+        offset
+    };
+}
+
+async function fetchMfgLitePage(offset, limit) {
+    try {
+        const response = await fetch(`/api/mfg-lite?offset=${encodeURIComponent(String(offset))}&limit=${encodeURIComponent(String(limit))}`, {
+            cache: 'no-store'
+        });
+        if (response.ok) {
+            const payload = await response.json();
+            return {
+                rows: Array.isArray(payload.rows) ? payload.rows : [],
+                total: Number(payload.total || 0),
+                offset: Number(payload.offset || offset)
+            };
+        }
+    } catch (error) {
+        // Static-file fallback below keeps the app usable without the local API.
+    }
+
+    if (offset > 0) {
+        return { rows: [], total: mfgTotalAvailable, offset };
+    }
+
+    const response = await fetch('mfg-companies-lite.json?v=20260425-1', { cache: 'no-store' });
+    if (!response.ok) {
+        return { rows: [], total: 0, offset };
+    }
+
+    const rows = await response.json();
+    if (!Array.isArray(rows)) {
+        return { rows: [], total: 0, offset };
+    }
+
+    return {
+        rows: rows.slice(0, limit),
+        total: rows.length,
+        offset
+    };
+}
+
+function buildMfgManufacturerRecord(row) {
+    return {
+        ...buildMfgRecordFromRow(row),
+        source: 'MFG Companies import',
+        sourceCategory: 'Bulk import lite',
+        detailsLoaded: Boolean(mfgEnrichmentOverrides[String(row?.[0])]?.description)
+    };
+}
+
+function buildMfgMapPinRecord(row) {
+    const id = row?.[0];
+    const name = row?.[1] || '';
+    const industry = visibleIndustryAliases[row?.[2]] || row?.[2] || 'Manufacturing';
+    const city = row?.[3] || '';
+    const state = row?.[4] || '';
+    const rawState = normalizeGeographyToken(state);
+    const stateKey = resolveStateKey(rawState);
+    const rawCity = normalizeGeographyToken(getPrimaryCityCandidate(city));
+    const cityCoordinateKey = rawCity && stateKey ? `${rawCity}|${stateKey}` : '';
+    const baseCoordinates = cityCoordinateKey && cityCoordinates[cityCoordinateKey]
+        ? cityCoordinates[cityCoordinateKey]
+        : (stateKey && stateCentroids[stateKey] ? stateCentroids[stateKey] : null);
+
+    if (!baseCoordinates) {
+        return null;
+    }
+
+    const manufacturer = {
+        id,
+        name,
+        twitter: '',
+        twitterUrl: '',
+        website: '',
+        email: '',
+        phone: '',
+        location: { city, state, zip: '' },
+        industry,
+        products: [],
+        description: '',
+        founded: null,
+        employees: '',
+        source: 'MFG Companies import',
+        sourceCategory: 'Map pins lite',
+        detailsLoaded: false,
+        isMapPinLite: true
+    };
+    const assignment = assignManufacturerToTaxonomy(manufacturer);
+    const categoryLabel = getMapCategoryLabel(assignment, manufacturer);
+    const subcategoryLabel = getMapSubcategoryLabel(assignment);
+    const markerColor = getCategoryColor(assignment, manufacturer);
+    const location = formatLocation(manufacturer.location);
+
+    return {
+        id,
+        name,
+        city,
+        state,
+        stateKey,
+        industry,
+        manufacturer,
+        baseCoordinates,
+        hasPreciseCity: Boolean(cityCoordinateKey && cityCoordinates[cityCoordinateKey]),
+        categoryLabel,
+        subcategoryLabel,
+        markerColor,
+        location,
+        searchText: normalizeSearchText([name, industry, city, state].filter(Boolean).join(' '))
+    };
 }
 
 async function loadMfgEnrichmentOverrides() {
@@ -1740,6 +1954,7 @@ function clearFilters() {
         mapSearchInput.value = '';
     }
     activeMapCategory = null;
+    activeMapSubcategory = null;
     activeMapState = null;
     closeMapDetailPanel();
     clearMapSearchResults();
@@ -1834,6 +2049,11 @@ async function showSearchCompanyDetail(manufacturer) {
         return;
     }
 
+    const company = await hydrateManufacturerDetails(manufacturer);
+    renderSearchCompanyDetail(company);
+}
+
+async function hydrateManufacturerDetails(manufacturer) {
     let company = manufacturer;
     if (manufacturer.source === 'MFG Companies import' && !manufacturer.detailsLoaded) {
         const details = await fetchCompanyDetails(manufacturer.id);
@@ -1843,7 +2063,21 @@ async function showSearchCompanyDetail(manufacturer) {
         }
     }
 
-    renderSearchCompanyDetail(company);
+    if (company?.id && !manufacturerAssignments.has(company.id)) {
+        manufacturerAssignments.set(company.id, assignManufacturerToTaxonomy(company));
+    }
+
+    return company;
+}
+
+async function showMapCompanyDetail(manufacturer) {
+    if (!manufacturer) {
+        return;
+    }
+
+    const company = await hydrateManufacturerDetails(manufacturer);
+    clearMapSearchResults();
+    showMapDetailPanel(company);
 }
 
 function renderSearchCompanyDetail(manufacturer) {
@@ -1971,6 +2205,7 @@ function attachEventListeners() {
             window.clearTimeout(mapSearchDebounceTimer);
             mapSearchDebounceTimer = window.setTimeout(() => {
                 activeMapCategory = null;
+                activeMapSubcategory = null;
                 activeMapState = null;
                 closeMapDetailPanel();
                 filterManufacturers();
@@ -2133,15 +2368,16 @@ function setAssistantExpanded(expanded) {
 function switchView(view) {
     currentView = view;
     document.body.classList.toggle('is-map-view', view === 'graph');
+    document.body.classList.toggle('is-list-view', view === 'tree');
 
     if (view === 'tree') {
         treeViewBtn.classList.add('active');
         graphViewBtn.classList.remove('active');
         renderManufacturers(filteredManufacturers);
         directoryGrid.style.display = 'block';
-        graphContainer.style.display = 'none';
+        graphContainer.style.display = 'block';
         if (scrollStory) {
-            scrollStory.style.display = 'block';
+            scrollStory.style.display = 'none';
         }
         return;
     }
@@ -2190,6 +2426,7 @@ function buildManufacturerMapPin(manufacturer) {
         coordinates,
         markerColor: getCategoryColor(assignment, manufacturer),
         categoryLabel,
+        subcategoryLabel: getMapSubcategoryLabel(assignment),
         stateLabel,
         location: formatLocation(manufacturer.location)
     };
@@ -2213,6 +2450,7 @@ function buildAggregateMapPins(pins) {
             count: 0,
             segments: new Map(),
             samples: [],
+            firstManufacturer: null,
             isAggregate: true,
             drillLevel
         };
@@ -2220,6 +2458,7 @@ function buildAggregateMapPins(pins) {
         bucket.coordinateTotals[0] += pin.coordinates[0];
         bucket.coordinateTotals[1] += pin.coordinates[1];
         bucket.count += 1;
+        bucket.firstManufacturer = bucket.firstManufacturer || pin.manufacturer;
         const segment = bucket.segments.get(pin.categoryLabel) || {
             categoryLabel: pin.categoryLabel,
             markerColor: pin.markerColor,
@@ -2266,6 +2505,9 @@ function getInitialClusterCoordinates(pin, drillLevel, stateLabel) {
 
 function getMapDrillLevel() {
     const zoom = usMap?.getZoom() || defaultUSView.zoom;
+    if (activeMapState || stateFilter?.value) {
+        return 'state';
+    }
     if (zoom >= 8) {
         return 'local';
     }
@@ -2381,13 +2623,33 @@ function getMapTooltipMarkup(pin) {
     `;
 }
 
-function updateMapModeHint(mappableCount, renderedCount) {
+function updateMapModeHint(mappableCount, renderedCount, matchCount = filteredManufacturers.length, pins = currentMapPins) {
     if (!resultsCount) {
         return;
     }
 
-    const highlightLabel = activeMapCategory ? ` | ${activeMapCategory} highlighted` : '';
-    resultsCount.textContent = `${filteredManufacturers.length.toLocaleString()} matches | ${mappableCount.toLocaleString()} tiny pins${highlightLabel}`;
+    const visibleCount = getVisibleMapPinCount(pins);
+    resultsCount.textContent = visibleCount.toLocaleString();
+}
+
+function getVisibleMapPinCount(pins) {
+    if (!Array.isArray(pins) || !pins.length) {
+        return 0;
+    }
+
+    if (!activeMapCategory) {
+        return pins.length;
+    }
+
+    return pins.filter(isMapPinHighlighted).length;
+}
+
+function getActiveMapHighlightLabel() {
+    if (!activeMapCategory) {
+        return '';
+    }
+
+    return ` | ${[activeMapCategory, activeMapSubcategory].filter(Boolean).join(' / ')} highlighted`;
 }
 
 function showMapDetailPanel(manufacturer) {
@@ -2440,7 +2702,13 @@ function closeMapDetailPanel() {
 }
 
 function renderGraph(manufacturersToGraph) {
-    generateMapLegend(manufacturersToGraph);
+    const useFullMfgMapPins = mfgMapPinRecords.length > 0;
+    const baseManufacturersForMap = useFullMfgMapPins
+        ? manufacturersToGraph.filter(manufacturer => manufacturer.source !== 'MFG Companies import')
+        : manufacturersToGraph;
+    const mfgMapPins = useFullMfgMapPins ? buildFilteredMfgMapPins() : [];
+    const mapMatchCount = baseManufacturersForMap.length + mfgMapPins.length;
+    generateMapLegend(baseManufacturersForMap, mfgMapPins);
 
     if (!networkGraphEl) {
         return;
@@ -2458,18 +2726,136 @@ function renderGraph(manufacturersToGraph) {
         return;
     }
 
+    const pins = [
+        ...buildMapPins(baseManufacturersForMap),
+        ...mfgMapPins
+    ];
     markerLayer.clearLayers();
-
-    const pins = buildMapPins(manufacturersToGraph);
     currentMapPins = pins;
     markPinWebglDataDirty();
     updateStateClusterStyles();
+
+    if (shouldRenderIndividualMapPins(pins)) {
+        redrawPinCanvasLayer();
+        updateMapModeHint(pins.length, pins.length, mapMatchCount, pins);
+        return;
+    }
+
+    currentMapPins = [];
+    markPinWebglDataDirty();
     redrawPinCanvasLayer();
-    updateMapModeHint(pins.length, pins.length);
+    const aggregateCount = renderAggregateMapMarkers(pins);
+    updateMapModeHint(pins.length, aggregateCount, mapMatchCount, pins);
+}
+
+function buildFilteredMfgMapPins() {
+    const pins = [];
+    const selectedState = stateFilter?.value || '';
+    const selectedIndustry = industryFilter?.value || '';
+    const searchQuery = normalizeSearchText(mapSearchInput?.value || '');
+    const searchTokens = getSearchTokens(searchQuery);
+
+    mfgMapPinRecords.forEach((record) => {
+        if (activeMapState && record.state !== activeMapState) {
+            return;
+        }
+        if (selectedState && record.state !== selectedState) {
+            return;
+        }
+        if (selectedIndustry && record.industry !== selectedIndustry) {
+            return;
+        }
+        if (searchTokens.length && !searchTokens.every(token => record.searchText.includes(token))) {
+            return;
+        }
+
+        const coordinates = getMfgMapPinDisplayCoordinates(record);
+        if (!coordinates) {
+            return;
+        }
+
+        pins.push({
+            manufacturer: record.manufacturer,
+            coordinates,
+            markerColor: record.markerColor,
+            categoryLabel: record.categoryLabel,
+            subcategoryLabel: record.subcategoryLabel,
+            stateLabel: record.state || 'Unknown state',
+            location: record.location
+        });
+    });
+
+    return pins;
+}
+
+function getMfgMapPinDisplayCoordinates(record) {
+    if (!record?.baseCoordinates) {
+        return null;
+    }
+
+    if (record.hasPreciseCity || !record.stateKey) {
+        return record.baseCoordinates;
+    }
+
+    return scatterCoordinatesWithinState(record.baseCoordinates, record.id || record.name, record.stateKey);
 }
 
 function drillIntoMapCluster(pin) {
     return;
+}
+
+function shouldRenderIndividualMapPins(pins) {
+    return pins.length <= DETAIL_PIN_RENDER_LIMIT;
+}
+
+function renderAggregateMapMarkers(pins) {
+    if (!markerLayer || !pins.length) {
+        return 0;
+    }
+
+    const aggregatePins = buildAggregateMapPins(pins);
+    aggregatePins.forEach((pin) => {
+        const marker = L.marker(pin.coordinates, {
+            icon: createClusterMarkerIcon(pin),
+            interactive: true,
+            keyboard: false,
+            riseOnHover: true
+        });
+        marker.bindTooltip(() => getMapTooltipMarkup(pin), {
+            direction: 'top',
+            opacity: 0.96,
+            sticky: true
+        });
+        marker.on('click', () => handleAggregateMapMarkerClick(pin));
+        marker.addTo(markerLayer);
+    });
+
+    return aggregatePins.length;
+}
+
+async function handleAggregateMapMarkerClick(pin) {
+    if (!pin) {
+        return;
+    }
+
+    if (pin.count === 1 && pin.firstManufacturer) {
+        await showMapCompanyDetail(pin.firstManufacturer);
+        return;
+    }
+
+    if (pin.drillLevel === 'national' && pin.stateLabel && stateFilter) {
+        const option = Array.from(stateFilter.options).find((item) => item.value === pin.stateLabel);
+        if (option) {
+            stateFilter.value = pin.stateLabel;
+            activeMapState = null;
+            closeMapDetailPanel();
+            clearMapSearchResults();
+            filterManufacturers();
+            return;
+        }
+    }
+
+    showClusterDetailPanel(pin);
 }
 
 function showClusterDetailPanel(pin) {
@@ -2508,7 +2894,9 @@ function ensurePinCanvasLayer() {
     pinCanvasLayer = L.canvasLayer()
         .delegate({
             onDrawLayer: drawPinCanvasLayer,
-            onClickLayer: handlePinCanvasClick
+            onClickLayer: handlePinCanvasClick,
+            onMouseMoveLayer: handlePinCanvasMouseMove,
+            onMouseOutLayer: handlePinCanvasMouseOut
         })
         .addTo(usMap);
 }
@@ -2529,6 +2917,11 @@ function markPinWebglDataDirty() {
 function drawPinCanvasLayer(info) {
     const canvas = info.canvas;
     if (!canvas || !usMap) {
+        return;
+    }
+
+    if (!USE_WEBGL_PIN_LAYER) {
+        drawPinsWithCanvas2d(canvas);
         return;
     }
 
@@ -2776,22 +3169,76 @@ function drawPinsWithCanvas2d(canvas) {
     const zoom = usMap.getZoom();
     const activeSize = zoom >= 7 ? 3 : zoom >= 5.5 ? 2.2 : 1.45;
     const mutedSize = Math.max(1.4, activeSize * 0.65);
+    resetPinHitGrid();
 
+    const drawPin = (pin, point, isHighlighted) => {
+        const size = isHighlighted ? activeSize : mutedSize;
+        const halfSize = size / 2;
+        ctx.globalAlpha = isHighlighted ? 0.92 : 0.06;
+        ctx.fillStyle = isHighlighted ? pin.markerColor : '#64748b';
+        ctx.fillRect(point.x - halfSize, point.y - halfSize, size, size);
+        if (isHighlighted) {
+            addPinToHitGrid(pin, point.x, point.y);
+        }
+    };
+
+    const visiblePins = [];
     currentMapPins.forEach((pin) => {
         const point = usMap.latLngToContainerPoint(pin.coordinates);
         if (point.x < -2 || point.y < -2 || point.x > canvas.width + 2 || point.y > canvas.height + 2) {
             return;
         }
 
-        const isHighlighted = !activeMapCategory || pin.categoryLabel === activeMapCategory;
-        const size = isHighlighted ? activeSize : mutedSize;
-        const halfSize = size / 2;
-        ctx.globalAlpha = isHighlighted ? 0.92 : 0.14;
-        ctx.fillStyle = isHighlighted ? pin.markerColor : '#475569';
-        ctx.fillRect(point.x - halfSize, point.y - halfSize, size, size);
+        visiblePins.push({ pin, point });
+    });
+
+    visiblePins.forEach(({ pin, point }) => {
+        const isHighlighted = isMapPinHighlighted(pin);
+        if (!activeMapCategory && !isHighlighted) {
+            drawPin(pin, point, false);
+        }
+    });
+
+    visiblePins.forEach(({ pin, point }) => {
+        const isHighlighted = isMapPinHighlighted(pin);
+        if (isHighlighted) {
+            drawPin(pin, point, true);
+        }
     });
 
     ctx.globalAlpha = 1;
+}
+
+function resetPinHitGrid() {
+    pinHitGrid = {
+        cellSize: PIN_HIT_GRID_CELL_SIZE,
+        cells: new Map()
+    };
+}
+
+function addPinToHitGrid(pin, x, y) {
+    if (!pinHitGrid) {
+        return;
+    }
+
+    const cellX = Math.floor(x / pinHitGrid.cellSize);
+    const cellY = Math.floor(y / pinHitGrid.cellSize);
+    const key = `${cellX}|${cellY}`;
+    const bucket = pinHitGrid.cells.get(key) || [];
+    bucket.push({ pin, x, y });
+    pinHitGrid.cells.set(key, bucket);
+}
+
+function isMapPinHighlighted(pin) {
+    if (!activeMapCategory) {
+        return true;
+    }
+
+    if (pin.categoryLabel !== activeMapCategory) {
+        return false;
+    }
+
+    return !activeMapSubcategory || pin.subcategoryLabel === activeMapSubcategory;
 }
 
 async function handlePinCanvasClick(event) {
@@ -2803,21 +3250,98 @@ async function handlePinCanvasClick(event) {
     const hit = findNearestCanvasPin(containerPoint);
     if (hit) {
         L.DomEvent.stop(event);
-        await showSearchCompanyDetail(hit.manufacturer);
+        await showMapCompanyDetail(hit.manufacturer);
         return;
     }
 
     L.DomEvent.stop(event);
 }
 
+function handlePinCanvasMouseMove(event) {
+    if (!usMap || !event) {
+        return;
+    }
+
+    const now = window.performance?.now?.() || Date.now();
+    if (handlePinCanvasMouseMove.lastRun && now - handlePinCanvasMouseMove.lastRun < CANVAS_PIN_HOVER_THROTTLE_MS) {
+        return;
+    }
+    handlePinCanvasMouseMove.lastRun = now;
+
+    const containerPoint = usMap.mouseEventToContainerPoint(event);
+    const hit = findNearestCanvasPin(containerPoint);
+    const canvas = event.currentTarget;
+
+    if (!hit) {
+        hideMapPinTooltip();
+        if (canvas?.style) {
+            canvas.style.cursor = '';
+        }
+        return;
+    }
+
+    if (canvas?.style) {
+        canvas.style.cursor = 'pointer';
+    }
+    showMapPinTooltip(event, getMapTooltipMarkup(hit));
+}
+
+function handlePinCanvasMouseOut() {
+    hideMapPinTooltip();
+}
+
 function findNearestCanvasPin(containerPoint) {
+    if (pinHitGrid?.cells?.size) {
+        return findNearestCanvasPinInGrid(containerPoint);
+    }
+
+    if (currentMapPins.length > 25000) {
+        return null;
+    }
+
+    return findNearestCanvasPinByScan(containerPoint);
+}
+
+function findNearestCanvasPinInGrid(containerPoint) {
+    let nearestPin = null;
+    let nearestDistance = Infinity;
+    const maxDistance = usMap.getZoom() >= 7 ? 7 : 5;
+    const maxDistanceSquared = maxDistance * maxDistance;
+    const cellSize = pinHitGrid.cellSize;
+    const centerX = Math.floor(containerPoint.x / cellSize);
+    const centerY = Math.floor(containerPoint.y / cellSize);
+    const searchRadius = Math.ceil(maxDistance / cellSize) + 1;
+
+    for (let x = centerX - searchRadius; x <= centerX + searchRadius; x += 1) {
+        for (let y = centerY - searchRadius; y <= centerY + searchRadius; y += 1) {
+            const bucket = pinHitGrid.cells.get(`${x}|${y}`);
+            if (!bucket) {
+                continue;
+            }
+
+            bucket.forEach((entry) => {
+                const dx = entry.x - containerPoint.x;
+                const dy = entry.y - containerPoint.y;
+                const distance = dx * dx + dy * dy;
+                if (distance <= maxDistanceSquared && distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestPin = entry.pin;
+                }
+            });
+        }
+    }
+
+    return nearestPin;
+}
+
+function findNearestCanvasPinByScan(containerPoint) {
     let nearestPin = null;
     let nearestDistance = Infinity;
     const maxDistance = usMap.getZoom() >= 7 ? 7 : 5;
     const maxDistanceSquared = maxDistance * maxDistance;
 
     currentMapPins.forEach((pin) => {
-        if (activeMapCategory && pin.categoryLabel !== activeMapCategory) {
+        if (!isMapPinHighlighted(pin)) {
             return;
         }
 
@@ -2863,17 +3387,31 @@ function createLeafletCanvasLayerClass() {
             map.getPanes().markerPane.appendChild(this._canvas);
             map.on('resize viewreset zoomend', this.needRedraw, this);
             L.DomEvent.on(this._canvas, 'click', this._handleClick, this);
+            L.DomEvent.on(this._canvas, 'mousemove', this._handleMouseMove, this);
+            L.DomEvent.on(this._canvas, 'mouseout', this._handleMouseOut, this);
             this.needRedraw();
         },
         onRemove(map) {
             map.off('resize viewreset zoomend', this.needRedraw, this);
             L.DomEvent.off(this._canvas, 'click', this._handleClick, this);
+            L.DomEvent.off(this._canvas, 'mousemove', this._handleMouseMove, this);
+            L.DomEvent.off(this._canvas, 'mouseout', this._handleMouseOut, this);
             L.DomUtil.remove(this._canvas);
             this._canvas = null;
         },
         _handleClick(event) {
             if (this._delegate?.onClickLayer) {
                 this._delegate.onClickLayer(event);
+            }
+        },
+        _handleMouseMove(event) {
+            if (this._delegate?.onMouseMoveLayer) {
+                this._delegate.onMouseMoveLayer(event);
+            }
+        },
+        _handleMouseOut(event) {
+            if (this._delegate?.onMouseOutLayer) {
+                this._delegate.onMouseOutLayer(event);
             }
         },
         needRedraw() {
@@ -3390,12 +3928,9 @@ function attachMapPinHoverTooltips() {
         return;
     }
 
-    let tooltip = networkGraphEl.querySelector('.map-pin-tooltip');
+    const tooltip = ensureMapPinTooltip();
     if (!tooltip) {
-        tooltip = document.createElement('div');
-        tooltip.className = 'map-pin-tooltip';
-        tooltip.hidden = true;
-        networkGraphEl.appendChild(tooltip);
+        return;
     }
 
     const showTooltip = (event) => {
@@ -3431,6 +3966,40 @@ function attachMapPinHoverTooltips() {
         pin.addEventListener('mousemove', moveTooltip);
         pin.addEventListener('mouseleave', hideTooltip);
     });
+}
+
+function ensureMapPinTooltip() {
+    if (!networkGraphEl) {
+        return null;
+    }
+
+    let tooltip = networkGraphEl.querySelector('.map-pin-tooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.className = 'map-pin-tooltip';
+        tooltip.hidden = true;
+        networkGraphEl.appendChild(tooltip);
+    }
+
+    return tooltip;
+}
+
+function showMapPinTooltip(event, markup) {
+    const tooltip = ensureMapPinTooltip();
+    if (!tooltip) {
+        return;
+    }
+
+    tooltip.innerHTML = markup;
+    tooltip.hidden = false;
+    positionMapTooltip(event, tooltip);
+}
+
+function hideMapPinTooltip() {
+    const tooltip = networkGraphEl?.querySelector('.map-pin-tooltip');
+    if (tooltip) {
+        tooltip.hidden = true;
+    }
 }
 
 function positionMapTooltip(event, tooltip) {
@@ -3531,15 +4100,7 @@ function scatterCoordinatesWithinState([lat, lng], seedValue, stateKey) {
         return bounds.scatterPoints[hash % bounds.scatterPoints.length];
     }
 
-    const angle = ((hash % 3600) / 3600) * Math.PI * 2;
-    const radiusSeed = (((hash >>> 8) % 1000) / 1000);
-    const radius = Math.sqrt(radiusSeed) * getStateScatterRadius(stateKey);
-    const latOffset = Math.sin(angle) * radius;
-    const lngOffset = Math.cos(angle) * radius * getLongitudeScatterScale(lat);
-    return [
-        lat + latOffset,
-        lng + lngOffset
-    ];
+    return [lat, lng];
 }
 
 function interpolate(min, max, ratio) {
@@ -3630,6 +4191,10 @@ function getMainCategoryLabel(assignment) {
     return assignment?.section || 'Other';
 }
 
+function getMapSubcategoryLabel(assignment) {
+    return assignment?.subcategory || 'Other';
+}
+
 function getMapCategoryLabel(assignment, manufacturer) {
     return getMainCategoryLabel(assignment);
 }
@@ -3639,20 +4204,26 @@ function getCategoryColor(assignment, manufacturer) {
     return mapSectionColors[categoryLabel] || getIndustryColor(categoryLabel);
 }
 
-function generateMapLegend(manufacturersToGraph) {
+function generateMapLegend(manufacturersToGraph, mapPins = []) {
     const mapLegend = document.getElementById('mapLegend');
     if (!mapLegend) return;
 
     const categoryColors = new Map();
+    const subcategoryCounts = new Map();
     manufacturersToGraph.forEach(manufacturer => {
         const assignment = manufacturerAssignments.get(manufacturer.id);
         const categoryLabel = getMapCategoryLabel(assignment, manufacturer);
+        const subcategoryLabel = getMapSubcategoryLabel(assignment);
         const color = getCategoryColor(assignment, manufacturer);
         categoryColors.set(categoryLabel, color);
+        addMapSubcategoryCount(subcategoryCounts, categoryLabel, subcategoryLabel);
+    });
+    mapPins.forEach(pin => {
+        categoryColors.set(pin.categoryLabel, pin.markerColor);
+        addMapSubcategoryCount(subcategoryCounts, pin.categoryLabel, pin.subcategoryLabel);
     });
 
-    const sortedCategories = Array.from(categoryColors.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-
+    const sortedCategories = Array.from(categoryColors.entries()).sort(compareMapCategoryEntries);
     if (sortedCategories.length === 0) {
         mapLegend.innerHTML = '';
         return;
@@ -3666,14 +4237,7 @@ function generateMapLegend(manufacturersToGraph) {
         </button>
         <div class="legend-items">
             ${sortedCategories.map(([category, color]) => `
-                <button
-                    class="legend-item${activeMapCategory === category ? ' is-active' : ''}"
-                    type="button"
-                    data-category="${escapeAttribute(category)}"
-                >
-                    <div class="legend-color" style="background-color: ${color};"></div>
-                    <span>${escapeHtml(category)}</span>
-                </button>
+                ${renderMapLegendCategory(category, color, subcategoryCounts.get(category))}
             `).join('')}
         </div>
     `;
@@ -3681,12 +4245,108 @@ function generateMapLegend(manufacturersToGraph) {
     mapLegend.querySelectorAll('[data-category]').forEach(element => {
         element.addEventListener('click', () => {
             const selectedCategory = element.getAttribute('data-category') || null;
-            activeMapCategory = selectedCategory === activeMapCategory ? null : selectedCategory;
+            const isSameCategory = selectedCategory === activeMapCategory;
+            activeMapCategory = isSameCategory ? null : selectedCategory;
+            activeMapSubcategory = null;
             activeMapState = null;
             renderGraph(filteredManufacturers);
             redrawPinCanvasLayer();
         });
     });
+
+    mapLegend.querySelectorAll('[data-subcategory]').forEach(element => {
+        element.addEventListener('click', () => {
+            activeMapSubcategory = element.getAttribute('data-subcategory') || null;
+            activeMapState = null;
+            renderGraph(filteredManufacturers);
+            redrawPinCanvasLayer();
+        });
+    });
+}
+
+function renderMapLegendCategory(category, color, subcategoryCountsForCategory) {
+    const isActive = activeMapCategory === category;
+    const subcategories = isActive
+        ? getOrderedMapSubcategories(category, subcategoryCountsForCategory)
+        : [];
+
+    return `
+        <div class="legend-category-group">
+            <button
+                class="legend-item${isActive ? ' is-active' : ''}"
+                type="button"
+                data-category="${escapeAttribute(category)}"
+                style="--legend-color: ${escapeAttribute(color)};"
+            >
+                <div class="legend-color" style="background-color: ${color};"></div>
+                <span>${escapeHtml(category)}</span>
+            </button>
+            ${isActive && subcategories.length ? renderMapLegendSubcategories(category, color, subcategories) : ''}
+        </div>
+    `;
+}
+
+function renderMapLegendSubcategories(category, color, subcategories) {
+    return `
+        <div class="legend-subcategory-panel" style="--legend-color: ${escapeAttribute(color || '#111827')};">
+            <div class="legend-subcategory-list">
+                ${subcategories.map(({ name, count }) => `
+                    <button
+                        class="legend-subcategory${activeMapSubcategory === name ? ' is-active' : ''}"
+                        type="button"
+                        data-subcategory="${escapeAttribute(name)}"
+                    >
+                        <span>${escapeHtml(name)}</span>
+                        <span>${count.toLocaleString()}</span>
+                    </button>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function addMapSubcategoryCount(countsByCategory, categoryLabel, subcategoryLabel) {
+    if (!categoryLabel || !subcategoryLabel) {
+        return;
+    }
+
+    const counts = countsByCategory.get(categoryLabel) || new Map();
+    counts.set(subcategoryLabel, (counts.get(subcategoryLabel) || 0) + 1);
+    countsByCategory.set(categoryLabel, counts);
+}
+
+function getOrderedMapSubcategories(categoryLabel, subcategoryCounts = new Map()) {
+    const taxonomySubcategories = tierTaxonomy
+        .flatMap(tier => tier.sections)
+        .find(section => section.name === categoryLabel)
+        ?.subcategories
+        ?.map(subcategory => subcategory.name) || [];
+
+    const ordered = taxonomySubcategories
+        .filter(name => subcategoryCounts.has(name))
+        .map(name => ({ name, count: subcategoryCounts.get(name) || 0 }));
+
+    Array.from(subcategoryCounts.entries())
+        .filter(([name]) => !taxonomySubcategories.includes(name))
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .forEach(([name, count]) => ordered.push({ name, count }));
+
+    return ordered;
+}
+
+function compareMapCategoryEntries([leftCategory], [rightCategory]) {
+    const leftIndex = getMapCategorySortIndex(leftCategory);
+    const rightIndex = getMapCategorySortIndex(rightCategory);
+    if (leftIndex !== rightIndex) {
+        return leftIndex - rightIndex;
+    }
+
+    return leftCategory.localeCompare(rightCategory);
+}
+
+function getMapCategorySortIndex(category) {
+    const index = mapCategoryOrder.indexOf(category);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
 }
 
 function appendChatMessage(role, html) {
@@ -3708,6 +4368,7 @@ function getAssistantUiState() {
         stateFilter: stateFilter.value || null,
         industryFilter: industryFilter.value || null,
         activeMapCategory,
+        activeMapSubcategory,
         visibleManufacturerCount: filteredManufacturers.length
     };
 }
@@ -3932,6 +4593,7 @@ function initializeStoryObserver() {
             entry.target.classList.add('active');
 
             activeMapCategory = null;
+            activeMapSubcategory = null;
             renderGraph(filteredManufacturers);
         });
     }, {

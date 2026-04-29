@@ -65,6 +65,10 @@ const requestHandler = async (req, res) => {
             await handleMfgLiteRequest(req, res);
             return;
         }
+        if (req.method === 'GET' && pathname === '/api/mfg-map-pins') {
+            await handleMfgMapPinsRequest(req, res);
+            return;
+        }
 
         if (pathname.startsWith('/api/') || pathname === '/api' || pathname === '/chat' || pathname === '/fun-fact') {
             sendJson(res, 404, { error: 'API route not found.' });
@@ -305,7 +309,7 @@ async function handleCompanyDetailsRequest(req, res) {
 async function handleMfgLiteRequest(req, res) {
     const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const offset = Math.max(0, Number(requestUrl.searchParams.get('offset') || 0));
-    const limit = Math.min(5000, Math.max(1, Number(requestUrl.searchParams.get('limit') || 1000)));
+    const limit = Math.min(25000, Math.max(1, Number(requestUrl.searchParams.get('limit') || 1000)));
 
     if (!mfgLiteRows) {
         mfgLiteRows = loadMfgLiteRows();
@@ -313,6 +317,22 @@ async function handleMfgLiteRequest(req, res) {
 
     const total = mfgLiteRows.length;
     const rows = mfgLiteRows.slice(offset, offset + limit);
+    sendJson(res, 200, { rows, total, offset, limit });
+}
+
+async function handleMfgMapPinsRequest(req, res) {
+    const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const offset = Math.max(0, Number(requestUrl.searchParams.get('offset') || 0));
+    const limit = Math.min(50000, Math.max(1, Number(requestUrl.searchParams.get('limit') || 25000)));
+
+    if (!mfgLiteRows) {
+        mfgLiteRows = loadMfgLiteRows();
+    }
+
+    const total = mfgLiteRows.length;
+    const rows = mfgLiteRows
+        .slice(offset, offset + limit)
+        .map(row => [row?.[0], row?.[1] || '', row?.[2] || 'Manufacturing', row?.[3] || '', row?.[4] || '']);
     sendJson(res, 200, { rows, total, offset, limit });
 }
 

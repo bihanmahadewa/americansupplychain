@@ -48,7 +48,9 @@
 <body>
     <div class="app-loading-overlay" id="appLoadingOverlay" aria-live="polite">
         <div class="app-loading-inner">
-            <p>Loading American Supply Chain...</p>
+            <span class="app-loading-flag-wrap" aria-hidden="true">
+                <img src="flag.png" alt="" class="app-loading-flag">
+            </span>
         </div>
     </div>
     <div class="page-shell">
@@ -67,6 +69,8 @@
             <section class="graph-container" id="graphContainer">
                 <section class="search-section map-search-panel" aria-label="Search and filter manufacturers">
                     <div class="map-search-box">
+                        <img src="flag.png" alt="" class="map-search-logo" aria-hidden="true">
+                        <h2 class="map-search-title">American Supply Chain</h2>
                         <label class="search-label" for="mapSearchInput">Search manufacturers</label>
                         <input
                             id="mapSearchInput"
@@ -77,7 +81,7 @@
                     </div>
 
                     <div class="filters">
-                        <select id="stateFilter" aria-label="Filter by state">
+                        <select id="stateFilter" aria-label="Filter by state" hidden>
                             <option value="">All States</option>
                         </select>
 
@@ -187,7 +191,7 @@
         </div>
 
         <div class="assistant-input">
-            <textarea id="chatInput" placeholder="Ask for manufacturers or describe what you're looking for." rows="4"></textarea>
+            <textarea id="chatInput" placeholder="Describe what you're looking for." rows="4"></textarea>
             <div class="assistant-actions">
                 <p class="assistant-hint">Press Enter to chat.</p>
                 <button id="chatSend">Chat</button>
@@ -205,6 +209,6 @@
     ></script>
     <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
     <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
-    <script src="app.js?v=20260426-4"></script>
+    <script src="app.js?v=20260428-2"></script>
 </body>
 </html>
