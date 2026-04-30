@@ -13,9 +13,11 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 const GITHUB_REPO = process.env.GITHUB_REPO || 'bihanmahadewa/americansupplychain';
 const GITHUB_BASE_BRANCH = process.env.GITHUB_BASE_BRANCH || '';
 const GITHUB_API_BASE = 'https://api.github.com';
-const FUN_FACTS_CACHE_PATH = path.join(ROOT, 'fun-facts-cache.json');
-const MFG_COMPANY_DETAILS_PATH = path.join(ROOT, 'mfg-companies-import.json');
-const MFG_COMPANY_DETAILS_CHUNKS_DIR = path.join(ROOT, 'mfg-company-details');
+const PUBLIC_DIR = path.join(ROOT, 'public');
+const PUBLIC_DATA_DIR = path.join(PUBLIC_DIR, 'data');
+const SERVER_DATA_DIR = path.join(ROOT, 'data');
+const FUN_FACTS_CACHE_PATH = path.join(SERVER_DATA_DIR, 'fun-facts-cache.json');
+const MFG_COMPANY_DETAILS_CHUNKS_DIR = path.join(PUBLIC_DATA_DIR, 'mfg-company-details');
 const DEFAULT_FUN_FACTS = [
     'The Springfield Armory helped pioneer interchangeable parts manufacturing in the U.S. during the 1800s.',
     'By 1913, Ford cut Model T assembly time to about 93 minutes, redefining industrial scale.',
@@ -462,9 +464,9 @@ async function serveStaticFile(req, res) {
     const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const rawPath = requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname;
     const normalizedPath = path.normalize(rawPath).replace(/^(\.\.[/\\])+/, '');
-    const filePath = path.join(ROOT, normalizedPath);
+    const filePath = path.join(PUBLIC_DIR, normalizedPath);
 
-    if (!filePath.startsWith(ROOT)) {
+    if (!filePath.startsWith(PUBLIC_DIR)) {
         sendJson(res, 403, { error: 'Forbidden.' });
         return;
     }
@@ -483,7 +485,7 @@ async function serveStaticFile(req, res) {
 }
 
 function loadManufacturers() {
-    const dataPath = path.join(ROOT, 'data.js');
+    const dataPath = path.join(PUBLIC_DATA_DIR, 'data.js');
     const source = fs.readFileSync(dataPath, 'utf8');
     const sandbox = {};
     vm.createContext(sandbox);
@@ -505,31 +507,23 @@ function loadMfgCompanyDetailsById() {
 }
 
 function loadMfgCompanyDetailRows() {
-    if (fs.existsSync(MFG_COMPANY_DETAILS_CHUNKS_DIR)) {
-        const chunkFiles = fs.readdirSync(MFG_COMPANY_DETAILS_CHUNKS_DIR)
-            .filter(name => /^part-\d+\.json$/i.test(name))
-            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-
-        if (chunkFiles.length > 0) {
-            return chunkFiles.flatMap((name) => {
-                const raw = fs.readFileSync(path.join(MFG_COMPANY_DETAILS_CHUNKS_DIR, name), 'utf8');
-                const rows = JSON.parse(raw);
-                return Array.isArray(rows) ? rows : [];
-            });
-        }
-    }
-
-    if (!fs.existsSync(MFG_COMPANY_DETAILS_PATH)) {
+    if (!fs.existsSync(MFG_COMPANY_DETAILS_CHUNKS_DIR)) {
         return [];
     }
 
-    const raw = fs.readFileSync(MFG_COMPANY_DETAILS_PATH, 'utf8');
-    const rows = JSON.parse(raw);
-    return Array.isArray(rows) ? rows : [];
+    const chunkFiles = fs.readdirSync(MFG_COMPANY_DETAILS_CHUNKS_DIR)
+        .filter(name => /^part-\d+\.json$/i.test(name))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    return chunkFiles.flatMap((name) => {
+        const raw = fs.readFileSync(path.join(MFG_COMPANY_DETAILS_CHUNKS_DIR, name), 'utf8');
+        const rows = JSON.parse(raw);
+        return Array.isArray(rows) ? rows : [];
+    });
 }
 
 function loadMfgLiteRows() {
-    const dataPath = path.join(ROOT, 'mfg-companies-lite.json');
+    const dataPath = path.join(PUBLIC_DATA_DIR, 'mfg-companies-lite.json');
     if (!fs.existsSync(dataPath)) {
         return [];
     }
@@ -987,7 +981,7 @@ async function createContributionPullRequest(submission) {
         }
     });
 
-    const filePath = 'data.js';
+    const filePath = 'public/data/data.js';
     const file = await githubRequest(`/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(baseBranch)}`);
     const source = Buffer.from(file.content || '', 'base64').toString('utf8');
     const nextId = getNextManufacturerIdFromSource(source);
@@ -1086,7 +1080,7 @@ function insertContributionRecord(source, record) {
     }
 
     const error = new Error('Could not find manufacturers array insertion point.');
-    error.publicMessage = 'Could not update data.js because its manufacturers array format was not recognized.';
+    error.publicMessage = 'Could not update public/data/data.js because its manufacturers array format was not recognized.';
     error.statusCode = 500;
     throw error;
 }
