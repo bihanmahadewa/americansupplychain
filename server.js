@@ -10,6 +10,8 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1';
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || '';
 const FUN_FACTS_CACHE_PATH = path.join(ROOT, 'fun-facts-cache.json');
+const MFG_COMPANY_DETAILS_PATH = path.join(ROOT, 'mfg-companies-import.json');
+const MFG_COMPANY_DETAILS_CHUNKS_DIR = path.join(ROOT, 'mfg-company-details');
 const DEFAULT_FUN_FACTS = [
     'The Springfield Armory helped pioneer interchangeable parts manufacturing in the U.S. during the 1800s.',
     'By 1913, Ford cut Model T assembly time to about 93 minutes, redefining industrial scale.',
@@ -35,6 +37,8 @@ const workspaceFiles = buildWorkspaceFileManifest();
 const manufacturers = loadManufacturers();
 let funFactsCache = loadFunFactsCache();
 let funFactCursor = 0;
+let mfgCompanyDetailsById = null;
+let mfgLiteRows = null;
 
 const requestHandler = async (req, res) => {
     try {
@@ -51,6 +55,14 @@ const requestHandler = async (req, res) => {
         }
         if (req.method === 'POST' && (pathname === '/api/fun-fact' || pathname === '/fun-fact')) {
             await handleFunFactRequest(req, res);
+            return;
+        }
+        if (req.method === 'GET' && pathname === '/api/company-details') {
+            await handleCompanyDetailsRequest(req, res);
+            return;
+        }
+        if (req.method === 'GET' && pathname === '/api/mfg-lite') {
+            await handleMfgLiteRequest(req, res);
             return;
         }
 
@@ -268,6 +280,42 @@ async function handleFunFactRequest(req, res) {
     });
 }
 
+async function handleCompanyDetailsRequest(req, res) {
+    const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const id = Number(requestUrl.searchParams.get('id') || 0);
+
+    if (!id) {
+        sendJson(res, 400, { error: 'Company id is required.' });
+        return;
+    }
+
+    if (!mfgCompanyDetailsById) {
+        mfgCompanyDetailsById = loadMfgCompanyDetailsById();
+    }
+
+    const record = mfgCompanyDetailsById.get(id);
+    if (!record) {
+        sendJson(res, 404, { error: 'Company details not found.' });
+        return;
+    }
+
+    sendJson(res, 200, { company: record });
+}
+
+async function handleMfgLiteRequest(req, res) {
+    const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const offset = Math.max(0, Number(requestUrl.searchParams.get('offset') || 0));
+    const limit = Math.min(5000, Math.max(1, Number(requestUrl.searchParams.get('limit') || 1000)));
+
+    if (!mfgLiteRows) {
+        mfgLiteRows = loadMfgLiteRows();
+    }
+
+    const total = mfgLiteRows.length;
+    const rows = mfgLiteRows.slice(offset, offset + limit);
+    sendJson(res, 200, { rows, total, offset, limit });
+}
+
 async function serveStaticFile(req, res) {
     const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const rawPath = requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname;
@@ -299,6 +347,54 @@ function loadManufacturers() {
     vm.createContext(sandbox);
     vm.runInContext(`${source}\nthis.__manufacturers = manufacturers;`, sandbox);
     return Array.isArray(sandbox.__manufacturers) ? sandbox.__manufacturers : [];
+}
+
+function loadMfgCompanyDetailsById() {
+    const map = new Map();
+    const rows = loadMfgCompanyDetailRows();
+
+    rows.forEach((row) => {
+        if (row && Number.isFinite(Number(row.id))) {
+            map.set(Number(row.id), row);
+        }
+    });
+
+    return map;
+}
+
+function loadMfgCompanyDetailRows() {
+    if (fs.existsSync(MFG_COMPANY_DETAILS_CHUNKS_DIR)) {
+        const chunkFiles = fs.readdirSync(MFG_COMPANY_DETAILS_CHUNKS_DIR)
+            .filter(name => /^part-\d+\.json$/i.test(name))
+            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+        if (chunkFiles.length > 0) {
+            return chunkFiles.flatMap((name) => {
+                const raw = fs.readFileSync(path.join(MFG_COMPANY_DETAILS_CHUNKS_DIR, name), 'utf8');
+                const rows = JSON.parse(raw);
+                return Array.isArray(rows) ? rows : [];
+            });
+        }
+    }
+
+    if (!fs.existsSync(MFG_COMPANY_DETAILS_PATH)) {
+        return [];
+    }
+
+    const raw = fs.readFileSync(MFG_COMPANY_DETAILS_PATH, 'utf8');
+    const rows = JSON.parse(raw);
+    return Array.isArray(rows) ? rows : [];
+}
+
+function loadMfgLiteRows() {
+    const dataPath = path.join(ROOT, 'mfg-companies-lite.json');
+    if (!fs.existsSync(dataPath)) {
+        return [];
+    }
+
+    const raw = fs.readFileSync(dataPath, 'utf8');
+    const rows = JSON.parse(raw);
+    return Array.isArray(rows) ? rows : [];
 }
 
 function buildWorkspaceFileManifest() {

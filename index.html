@@ -46,11 +46,21 @@
     </script>
 </head>
 <body>
+    <div class="app-loading-overlay" id="appLoadingOverlay" aria-live="polite">
+        <div class="app-loading-inner">
+            <div class="app-loading-flag-wrap" aria-hidden="true">
+                <img src="flag.png" alt="American flag" class="app-loading-flag">
+            </div>
+            <p>Loading American Supply Chain...</p>
+        </div>
+    </div>
     <div class="page-shell">
         <header>
             <div class="container">
                 <div class="header-logo">
-                    <img src="flag.png" alt="American flag" class="flag-icon">
+                    <span class="header-flag-wrap" aria-hidden="true">
+                        <img src="flag.png" alt="American flag" class="flag-icon">
+                    </span>
                     <h1>American Supply Chain</h1>
                 </div>
             </div>
@@ -58,6 +68,11 @@
 
         <main class="container">
             <section class="search-section">
+                <div class="story-intro">
+                    <p class="story-kicker">Interactive Atlas</p>
+                    <h2>Tracking American Industrial Capacity</h2>
+                    <p class="story-lede">Scroll, filter, and explore where U.S. manufacturers are concentrated across the national supply chain.</p>
+                </div>
                 <div class="filters">
                     <select id="stateFilter">
                         <option value="">All States</option>
@@ -73,6 +88,8 @@
                 <div class="view-controls">
                     <button id="treeViewBtn" class="view-btn active">List</button>
                     <button id="graphViewBtn" class="view-btn">Map</button>
+                    <button id="mapModeCategoriesBtn" class="view-btn active" type="button">Categories</button>
+                    <button id="mapModeCompaniesBtn" class="view-btn" type="button">Companies</button>
                 </div>
 
                 <div class="results-info">
@@ -80,13 +97,31 @@
                 </div>
             </section>
 
-            <section class="directory-grid" id="directoryGrid">
-                <!-- Category directory will be inserted here -->
+            <section class="graph-container" id="graphContainer">
+                <div id="networkGraph" aria-label="Map of U.S. manufacturers"></div>
+                <div class="map-legend" id="mapLegend"></div>
             </section>
 
-            <section class="graph-container" id="graphContainer" style="display: none;">
-                <div id="networkGraph"></div>
-                <div class="map-legend" id="mapLegend"></div>
+            <section class="scroll-story" id="scrollStory">
+                <div class="story-column">
+                    <article class="story-step active" data-highlight="">
+                        <p class="story-step-kicker">Now trending</p>
+                        <h3>Hottest Startups</h3>
+                        <p>High-signal U.S. industrial startups from this dataset.</p>
+                        <ol class="story-list" id="hottestStartupsList"></ol>
+                    </article>
+
+                    <article class="story-step" data-highlight="">
+                        <p class="story-step-kicker">Who to follow</p>
+                        <h3>Reindustrialize Builders on X</h3>
+                        <p>People consistently shipping ideas, factories, and policy narratives.</p>
+                        <ol class="story-list" id="peopleToFollowList"></ol>
+                    </article>
+                </div>
+            </section>
+
+            <section class="directory-grid" id="directoryGrid" style="display: none;">
+                <!-- Category directory will be inserted here -->
             </section>
 
             <section class="add-manufacturer">
@@ -129,10 +164,6 @@
 
     <aside class="assistant-panel" id="assistantPanel">
         <div class="assistant-panel-body is-landing" id="assistantPanelBody">
-            <div class="assistant-powered" id="assistantPowered">
-                <img src="openai.svg" alt="OpenAI logo" class="assistant-powered-logo">
-                <span>CHAT WITH SUPPLY CHAIN</span>
-            </div>
             <div class="assistant-messages" id="chatMessages">
             </div>
             <div class="fun-fact-card" id="funFactCard" hidden>
@@ -170,6 +201,8 @@
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
         crossorigin=""
     ></script>
-    <script src="app.js?v=20260417-2"></script>
+    <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
+    <script src="app.js?v=20260426-4"></script>
 </body>
 </html>
