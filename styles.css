@@ -2590,9 +2590,9 @@ body.is-list-view .signals-rail {
     min-height: 0;
     margin-top: 16px;
     padding: 14px;
-    border: 1px solid #d8dee7;
+    border: 1px solid #bfdbfe;
     border-radius: 8px;
-    background: #f1f4f7;
+    background: #eff6ff;
     flex-direction: column;
 }
 
@@ -2629,17 +2629,17 @@ body.is-list-view .signals-rail {
     display: grid;
     gap: 4px;
     padding: 10px;
-    border: 1px solid #d7dee8;
+    border: 1px solid #bfdbfe;
     border-radius: 8px;
-    background: #f1f4f7;
+    background: #eff6ff;
     color: #111827;
     text-decoration: none;
 }
 
 .signal-item:hover,
 .signal-item:focus {
-    border-color: #cbd5e1;
-    background: #eef2f6;
+    border-color: #93c5fd;
+    background: #dbeafe;
     outline: none;
 }
 
@@ -2647,8 +2647,8 @@ body.is-list-view .signals-rail {
     width: fit-content;
     padding: 3px 6px;
     border-radius: 999px;
-    background: #e2e8f0;
-    color: #334155;
+    background: #dbeafe;
+    color: #1d4ed8;
     font-size: 10px;
     font-weight: 800;
     letter-spacing: 0.04em;
