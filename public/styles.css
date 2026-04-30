@@ -869,7 +869,9 @@ span.manufacturer-name {
     z-index: 1000;
     max-width: 280px;
     max-height: 300px;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     padding: 12px;
     background: #fff;
     border: 1px solid #ddd;
@@ -911,7 +913,10 @@ span.manufacturer-name {
 .legend-items {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
     gap: 6px;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .legend-category-group {
@@ -989,6 +994,58 @@ span.manufacturer-name {
     height: 12px;
     border-radius: 50%;
     flex-shrink: 0;
+}
+
+.legend-footer {
+    display: flex;
+    justify-content: center;
+    flex: 0 0 auto;
+    margin: auto -12px -12px;
+    padding: 10px 12px 12px;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.78), #ffffff 36%);
+}
+
+.legend-follow-x {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    width: fit-content;
+    padding: 5px 8px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: #111827;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+    text-decoration: none;
+}
+
+.legend-follow-x a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.legend-follow-x a:hover {
+    text-decoration: underline;
+}
+
+.legend-follow-x:focus-within,
+.legend-follow-x:hover {
+    border-color: #d1d5db;
+    background: #f9fafb;
+}
+
+.legend-follow-separator {
+    color: #9ca3af;
+}
+
+.legend-x-logo {
+    width: 11px;
+    height: 11px;
+    fill: currentColor;
+    flex: 0 0 auto;
 }
 
 @media (max-width: 720px) {
@@ -1505,6 +1562,20 @@ header h1 {
     background: #1a2b49;
 }
 
+.legend-footer {
+    background: linear-gradient(to bottom, rgba(11, 18, 34, 0.08), rgba(11, 18, 34, 0.95) 36%);
+}
+
+.legend-follow-x {
+    color: #d9e2f3;
+}
+
+.legend-follow-x:focus-within,
+.legend-follow-x:hover {
+    border-color: #4a5f84;
+    background: #14213a;
+}
+
 .directory-grid {
     padding-top: 12px;
 }
@@ -1910,6 +1981,19 @@ main.container {
 .legend-reset:hover,
 .legend-item:hover {
     border-color: #c9d0dd;
+    background: #f9fafb;
+}
+
+.legend-footer {
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.78), #ffffff 36%);
+}
+
+.legend-follow-x {
+    color: #111827;
+}
+
+.legend-follow-x:hover {
+    border-color: #d1d5db;
     background: #f9fafb;
 }
 
