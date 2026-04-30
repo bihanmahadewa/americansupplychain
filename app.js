@@ -10,6 +10,13 @@ const mapSearchResults = document.getElementById('mapSearchResults');
 const mapDetailPanel = document.getElementById('mapDetailPanel');
 const resultsCount = document.getElementById('resultsCount');
 const suggestBtn = document.getElementById('suggestBtn');
+const contributeBtn = document.getElementById('contributeBtn');
+const contributeModal = document.getElementById('contributeModal');
+const contributeForm = document.getElementById('contributeForm');
+const contributeSubmit = document.getElementById('contributeSubmit');
+const contributeStatus = document.getElementById('contributeStatus');
+const contributeState = document.getElementById('contributeState');
+const contributeIndustry = document.getElementById('contributeIndustry');
 const treeViewBtn = document.getElementById('treeViewBtn');
 const graphViewBtn = document.getElementById('graphViewBtn');
 const mapModeCategoriesBtn = document.getElementById('mapModeCategoriesBtn');
@@ -939,6 +946,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadMfgCompanies();
     filteredManufacturers = [...manufacturers];
     populateFilters();
+    populateContributionOptions();
     switchView(getInitialView());
     startMfgMapPinLoad();
     initializeFunFacts();
@@ -2563,6 +2571,7 @@ function attachEventListeners() {
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             closeMobileAssistantPanel();
+            closeContributionModal();
         }
     });
 
@@ -2599,9 +2608,112 @@ function attachEventListeners() {
         });
     }
 
-    suggestBtn.addEventListener('click', () => {
+    if (suggestBtn) {
+        suggestBtn.addEventListener('click', openContributionModal);
+    }
+    if (contributeBtn) {
+        contributeBtn.addEventListener('click', openContributionModal);
+    }
+    if (contributeModal) {
+        contributeModal.querySelectorAll('[data-contribute-close]').forEach((element) => {
+            element.addEventListener('click', closeContributionModal);
+        });
+    }
+    if (contributeForm) {
+        contributeForm.addEventListener('submit', submitContribution);
+    }
+}
+
+function populateContributionOptions() {
+    if (contributeState && contributeState.options.length <= 1) {
+        allUSStates.forEach((state) => {
+            const option = document.createElement('option');
+            option.value = state;
+            option.textContent = state;
+            contributeState.appendChild(option);
+        });
+    }
+
+    if (contributeIndustry && contributeIndustry.options.length <= 1) {
+        getUniqueIndustries().forEach((industry) => {
+            const option = document.createElement('option');
+            option.value = industry;
+            option.textContent = industry;
+            contributeIndustry.appendChild(option);
+        });
+    }
+}
+
+function openContributionModal() {
+    if (!contributeModal) {
         window.open('https://github.com/bihanmahadewa/americansupplychain', '_blank');
-    });
+        return;
+    }
+
+    contributeModal.hidden = false;
+    document.body.classList.add('has-contribute-modal');
+    setContributionStatus('');
+
+    const firstInput = contributeModal.querySelector('input[name="name"]');
+    if (firstInput) {
+        window.setTimeout(() => firstInput.focus(), 0);
+    }
+}
+
+function closeContributionModal() {
+    if (!contributeModal || contributeModal.hidden) {
+        return;
+    }
+
+    contributeModal.hidden = true;
+    document.body.classList.remove('has-contribute-modal');
+}
+
+async function submitContribution(event) {
+    event.preventDefault();
+    if (!contributeForm || !contributeSubmit) {
+        return;
+    }
+
+    const payload = Object.fromEntries(new FormData(contributeForm).entries());
+    setContributionStatus('Submitting contribution...', 'is-pending');
+    contributeSubmit.disabled = true;
+
+    try {
+        const response = await fetch('/api/contribute', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Contribution failed.');
+        }
+
+        setContributionStatus(result.pullRequestUrl
+            ? `Contribution submitted: ${result.pullRequestUrl}`
+            : 'Contribution submitted.', 'is-success');
+        contributeForm.reset();
+        if (result.pullRequestUrl) {
+            window.open(result.pullRequestUrl, '_blank', 'noopener');
+        }
+    } catch (error) {
+        setContributionStatus(error.message || 'Could not open a pull request.', 'is-error');
+    } finally {
+        contributeSubmit.disabled = false;
+    }
+}
+
+function setContributionStatus(message, className = '') {
+    if (!contributeStatus) {
+        return;
+    }
+
+    contributeStatus.textContent = message;
+    contributeStatus.className = `contribute-status ${className}`.trim();
 }
 
 function isMobileViewport() {

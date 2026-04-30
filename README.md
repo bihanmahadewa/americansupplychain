@@ -59,6 +59,19 @@ Use this structure for each company entry:
    - Source(s) used
    - Any assumptions or normalization decisions
 
+## Website Contribution Form
+The in-app **Contribute** button can open a pull request automatically when the server has GitHub credentials.
+
+Set these environment variables on the server:
+
+```sh
+GITHUB_TOKEN=github_pat_or_app_token
+GITHUB_REPO=bihanmahadewa/americansupplychain
+GITHUB_BASE_BRANCH=main
+```
+
+The token needs permission to create branches, write `data.js`, and open pull requests. Without `GITHUB_TOKEN`, the form still opens but submission returns a setup message instead of exposing credentials in the browser.
+
 ## Quality Checklist
 - [ ] Entry is a real company and relevant to U.S. supply chain/manufacturing.
 - [ ] `name`, `industry`, `location`, `products`, and `description` are present.

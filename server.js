@@ -9,6 +9,10 @@ const ROOT = __dirname;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1';
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || '';
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const GITHUB_REPO = process.env.GITHUB_REPO || 'bihanmahadewa/americansupplychain';
+const GITHUB_BASE_BRANCH = process.env.GITHUB_BASE_BRANCH || '';
+const GITHUB_API_BASE = 'https://api.github.com';
 const FUN_FACTS_CACHE_PATH = path.join(ROOT, 'fun-facts-cache.json');
 const MFG_COMPANY_DETAILS_PATH = path.join(ROOT, 'mfg-companies-import.json');
 const MFG_COMPANY_DETAILS_CHUNKS_DIR = path.join(ROOT, 'mfg-company-details');
@@ -112,6 +116,10 @@ const requestHandler = async (req, res) => {
         }
         if (req.method === 'GET' && pathname === '/api/mfg-map-pins') {
             await handleMfgMapPinsRequest(req, res);
+            return;
+        }
+        if (req.method === 'POST' && pathname === '/api/contribute') {
+            await handleContributeRequest(req, res);
             return;
         }
 
@@ -401,6 +409,53 @@ async function handleMfgMapPinsRequest(req, res) {
         .slice(offset, offset + limit)
         .map(row => [row?.[0], row?.[1] || '', row?.[2] || 'Manufacturing', row?.[3] || '', row?.[4] || '']);
     sendJson(res, 200, { rows, total, offset, limit });
+}
+
+async function handleContributeRequest(req, res) {
+    let body;
+    try {
+        body = await readJsonBody(req);
+    } catch (error) {
+        sendJson(res, 400, { error: 'Submission body must be valid JSON.' });
+        return;
+    }
+
+    const submission = normalizeContribution(body);
+    const validationErrors = validateContribution(submission);
+    if (validationErrors.length) {
+        sendJson(res, 400, { error: validationErrors[0], errors: validationErrors });
+        return;
+    }
+
+    const duplicate = findDuplicateManufacturer(submission);
+    if (duplicate) {
+        sendJson(res, 409, {
+            error: `${duplicate.name} already appears to be in the directory.`
+        });
+        return;
+    }
+
+    if (!GITHUB_TOKEN) {
+        sendJson(res, 503, {
+            error: 'GitHub PR automation is not configured yet. Set GITHUB_TOKEN on the server.'
+        });
+        return;
+    }
+
+    try {
+        const result = await createContributionPullRequest(submission);
+        sendJson(res, 200, {
+            message: 'Pull request opened.',
+            pullRequestUrl: result.pullRequestUrl,
+            branch: result.branch,
+            id: result.id
+        });
+    } catch (error) {
+        console.error('Contribution PR failed:', error);
+        sendJson(res, error.statusCode || 502, {
+            error: error.publicMessage || 'Could not open a pull request for this submission.'
+        });
+    }
 }
 
 async function serveStaticFile(req, res) {
@@ -779,6 +834,296 @@ function shouldForceRecommendMode(message) {
     ];
 
     return strategySignals.some(signal => text.includes(signal));
+}
+
+function normalizeContribution(body) {
+    const twitterValue = cleanContributionText(body.twitter, 120);
+    const twitterUrl = twitterValue
+        ? (isLikelyUrl(twitterValue)
+            ? normalizeUrl(twitterValue)
+            : `https://x.com/${twitterValue.replace(/^@/, '')}`)
+        : '';
+
+    return {
+        name: cleanContributionText(body.name, 120),
+        website: normalizeUrl(body.website),
+        email: cleanContributionText(body.email, 160),
+        phone: cleanContributionText(body.phone, 80),
+        twitter: twitterValue && !isLikelyUrl(twitterValue)
+            ? (twitterValue.startsWith('@') ? twitterValue : `@${twitterValue}`)
+            : '',
+        twitterUrl,
+        location: {
+            city: cleanContributionText(body.city, 80),
+            state: cleanContributionText(body.state, 80),
+            zip: cleanContributionText(body.zip, 20)
+        },
+        industry: cleanContributionText(body.industry, 100),
+        products: splitContributionList(body.products).slice(0, 12),
+        description: cleanContributionText(body.description, 500),
+        founded: normalizeOptionalYear(body.founded),
+        employees: cleanContributionText(body.employees, 60)
+    };
+}
+
+function cleanContributionText(value, maxLength) {
+    return String(value || '')
+        .replace(/[\u0000-\u001f\u007f]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, maxLength);
+}
+
+function splitContributionList(value) {
+    return String(value || '')
+        .split(/[,;\n]/)
+        .map(item => cleanContributionText(item, 90))
+        .filter(Boolean);
+}
+
+function normalizeOptionalYear(value) {
+    const text = cleanContributionText(value, 10);
+    if (!text) {
+        return null;
+    }
+    const year = Number(text);
+    const currentYear = new Date().getFullYear();
+    return Number.isInteger(year) && year >= 1600 && year <= currentYear ? year : null;
+}
+
+function normalizeUrl(value) {
+    const text = cleanContributionText(value, 300);
+    if (!text) {
+        return '';
+    }
+    try {
+        const withProtocol = /^https?:\/\//i.test(text) ? text : `https://${text}`;
+        const url = new URL(withProtocol);
+        if (!/^https?:$/i.test(url.protocol)) {
+            return '';
+        }
+        return url.toString();
+    } catch (error) {
+        return '';
+    }
+}
+
+function isLikelyUrl(value) {
+    return /^https?:\/\//i.test(String(value || '')) || /\./.test(String(value || ''));
+}
+
+function validateContribution(submission) {
+    const errors = [];
+    if (!submission.name) {
+        errors.push('Business name is required.');
+    }
+    if (!submission.website) {
+        errors.push('A valid business website is required.');
+    }
+    if (!submission.industry) {
+        errors.push('Industry is required.');
+    }
+    if (!submission.location.city || !submission.location.state) {
+        errors.push('City and state are required.');
+    }
+    if (!submission.products.length) {
+        errors.push('Add at least one product or capability.');
+    }
+    if (!submission.description) {
+        errors.push('Description is required.');
+    }
+    if (submission.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(submission.email)) {
+        errors.push('The business email address is not valid.');
+    }
+    return errors;
+}
+
+function findDuplicateManufacturer(submission) {
+    const submittedName = normalizeComparisonText(submission.name);
+    const submittedHost = getHostname(submission.website);
+
+    return manufacturers.find((manufacturer) => {
+        const manufacturerName = normalizeComparisonText(manufacturer.name);
+        const manufacturerHost = getHostname(manufacturer.website);
+        return (submittedName && submittedName === manufacturerName)
+            || (submittedHost && submittedHost === manufacturerHost);
+    });
+}
+
+function normalizeComparisonText(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function getHostname(value) {
+    try {
+        return new URL(value).hostname.replace(/^www\./i, '').toLowerCase();
+    } catch (error) {
+        return '';
+    }
+}
+
+async function createContributionPullRequest(submission) {
+    const [owner, repo] = GITHUB_REPO.split('/');
+    if (!owner || !repo) {
+        const error = new Error('Invalid GITHUB_REPO.');
+        error.publicMessage = 'Server has an invalid GITHUB_REPO setting.';
+        error.statusCode = 500;
+        throw error;
+    }
+
+    const repoInfo = await githubRequest(`/repos/${owner}/${repo}`);
+    const baseBranch = GITHUB_BASE_BRANCH || repoInfo.default_branch || 'main';
+    const baseRef = await githubRequest(`/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(baseBranch)}`);
+    const branch = `contribute/${slugifyBranchPart(submission.name)}-${Date.now()}`;
+
+    await githubRequest(`/repos/${owner}/${repo}/git/refs`, {
+        method: 'POST',
+        body: {
+            ref: `refs/heads/${branch}`,
+            sha: baseRef.object.sha
+        }
+    });
+
+    const filePath = 'data.js';
+    const file = await githubRequest(`/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(baseBranch)}`);
+    const source = Buffer.from(file.content || '', 'base64').toString('utf8');
+    const nextId = getNextManufacturerIdFromSource(source);
+    const record = buildContributionRecord(submission, nextId);
+    const updatedSource = insertContributionRecord(source, record);
+
+    await githubRequest(`/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`, {
+        method: 'PUT',
+        body: {
+            message: `Add ${submission.name} to manufacturer directory`,
+            content: Buffer.from(updatedSource, 'utf8').toString('base64'),
+            sha: file.sha,
+            branch
+        }
+    });
+
+    const pullRequest = await githubRequest(`/repos/${owner}/${repo}/pulls`, {
+        method: 'POST',
+        body: {
+            title: `Add ${submission.name}`,
+            head: branch,
+            base: baseBranch,
+            body: buildContributionPullRequestBody(submission, record)
+        }
+    });
+
+    return {
+        id: nextId,
+        branch,
+        pullRequestUrl: pullRequest.html_url
+    };
+}
+
+async function githubRequest(endpoint, options = {}) {
+    const response = await fetch(`${GITHUB_API_BASE}${endpoint}`, {
+        method: options.method || 'GET',
+        headers: {
+            'Accept': 'application/vnd.github+json',
+            'Authorization': `Bearer ${GITHUB_TOKEN}`,
+            'Content-Type': 'application/json',
+            'User-Agent': 'american-supply-chain-contributor',
+            'X-GitHub-Api-Version': '2022-11-28'
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const error = new Error(payload.message || `GitHub request failed with ${response.status}`);
+        error.statusCode = response.status;
+        error.publicMessage = payload.message || 'GitHub rejected the contribution request.';
+        throw error;
+    }
+
+    return payload;
+}
+
+function getNextManufacturerIdFromSource(source) {
+    const ids = Array.from(String(source || '').matchAll(/["']?id["']?\s*:\s*(\d+)/g))
+        .map(match => Number(match[1]))
+        .filter(Number.isFinite);
+    return (ids.length ? Math.max(...ids) : 0) + 1;
+}
+
+function buildContributionRecord(submission, id) {
+    return {
+        id,
+        name: submission.name,
+        twitter: submission.twitter,
+        twitterUrl: submission.twitterUrl,
+        website: submission.website,
+        email: submission.email,
+        phone: submission.phone,
+        location: submission.location,
+        industry: submission.industry,
+        products: submission.products,
+        description: submission.description,
+        founded: submission.founded,
+        employees: submission.employees,
+        source: 'Community submission',
+        sourceUrl: submission.website
+    };
+}
+
+function insertContributionRecord(source, record) {
+    const marker = '    // Add your X.com manufacturer profiles here';
+    const recordText = formatManufacturerRecord(record);
+
+    if (source.includes(marker)) {
+        return source.replace(marker, `${recordText},\n${marker}`);
+    }
+
+    const arrayEnd = source.indexOf('\n];');
+    if (arrayEnd >= 0) {
+        return `${source.slice(0, arrayEnd)}\n${recordText}\n${source.slice(arrayEnd)}`;
+    }
+
+    const error = new Error('Could not find manufacturers array insertion point.');
+    error.publicMessage = 'Could not update data.js because its manufacturers array format was not recognized.';
+    error.statusCode = 500;
+    throw error;
+}
+
+function formatManufacturerRecord(record) {
+    const json = JSON.stringify(record, null, 8)
+        .replace(/\n/g, '\n    ');
+    return `    ${json}`;
+}
+
+function buildContributionPullRequestBody(submission, record) {
+    const lines = [
+        'Community submission from the website contribution form.',
+        '',
+        '### Company',
+        `- Name: ${record.name}`,
+        `- Website: ${record.website}`,
+        `- Industry: ${record.industry}`,
+        `- Location: ${record.location.city}, ${record.location.state}${record.location.zip ? ` ${record.location.zip}` : ''}`,
+        `- Products: ${record.products.join(', ')}`,
+        `- Source: ${record.sourceUrl}`,
+        '',
+        '- [ ] Confirm the company is a real U.S.-based manufacturer or industrial supplier.',
+        '- [ ] Confirm there is no duplicate entry.',
+        '- [ ] Confirm website/source evidence supports the submitted fields.'
+    ];
+
+    return lines.join('\n');
+}
+
+function slugifyBranchPart(value) {
+    const slug = String(value || 'business')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 48);
+    return slug || 'business';
 }
 
 async function fetchReshoringSignals() {

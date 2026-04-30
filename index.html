@@ -108,6 +108,7 @@
 
                     <div class="results-info">
                         <span id="resultsCount">0 manufacturers indexed</span>
+                        <button id="contributeBtn" type="button">Contribute</button>
                     </div>
 
                     <div class="map-search-results" id="mapSearchResults" hidden></div>
@@ -141,8 +142,89 @@
 
             <section class="add-manufacturer">
                 <p>Know a company that belongs in one of the missing categories? This project is open source.</p>
-                <button id="suggestBtn">Contribute</button>
+                <button id="suggestBtn" type="button">Contribute</button>
             </section>
+
+            <div class="contribute-modal" id="contributeModal" hidden>
+                <div class="contribute-backdrop" data-contribute-close></div>
+                <section class="contribute-dialog" role="dialog" aria-modal="true" aria-labelledby="contributeTitle">
+                    <div class="contribute-header">
+                        <div>
+                            <p class="contribute-kicker">Community submission</p>
+                            <h2 id="contributeTitle">Add a business</h2>
+                        </div>
+                        <button class="contribute-close" type="button" aria-label="Close contribution form" data-contribute-close>&times;</button>
+                    </div>
+
+                    <form class="contribute-form" id="contributeForm">
+                        <div class="contribute-grid">
+                            <label>
+                                <span>Business name</span>
+                                <input name="name" autocomplete="organization" required>
+                            </label>
+                            <label>
+                                <span>Website</span>
+                                <input name="website" type="url" autocomplete="url" placeholder="https://example.com" required>
+                            </label>
+                            <label>
+                                <span>Industry</span>
+                                <select name="industry" id="contributeIndustry" required>
+                                    <option value="">Select industry</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span>Products or capabilities</span>
+                                <input name="products" placeholder="CNC machining, metal fabrication" required>
+                            </label>
+                            <label>
+                                <span>City</span>
+                                <input name="city" autocomplete="address-level2" required>
+                            </label>
+                            <label>
+                                <span>State</span>
+                                <select name="state" id="contributeState" autocomplete="address-level1" required>
+                                    <option value="">Select state</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span>ZIP</span>
+                                <input name="zip" inputmode="numeric" autocomplete="postal-code">
+                            </label>
+                            <label>
+                                <span>Business email</span>
+                                <input name="email" type="email" autocomplete="email">
+                            </label>
+                            <label>
+                                <span>Phone</span>
+                                <input name="phone" autocomplete="tel">
+                            </label>
+                            <label>
+                                <span>X handle or URL</span>
+                                <input name="twitter" placeholder="@company">
+                            </label>
+                            <label>
+                                <span>Founded</span>
+                                <input name="founded" inputmode="numeric" placeholder="1999">
+                            </label>
+                            <label>
+                                <span>Employees</span>
+                                <input name="employees" placeholder="50-100">
+                            </label>
+                        </div>
+
+                        <label>
+                            <span>Description</span>
+                            <textarea name="description" rows="4" maxlength="500" placeholder="Short factual summary of what the company makes in the U.S." required></textarea>
+                        </label>
+
+                        <p class="contribute-status" id="contributeStatus" role="status" aria-live="polite"></p>
+
+                        <div class="contribute-actions">
+                            <button class="contribute-submit" id="contributeSubmit" type="submit">Contribute</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
 
             <section class="data-attribution">
                 <p>The directory includes public company website references and a filtered import of public-facing U.S. battery supply-chain entries from the NAATBatt database, limited to categories already supported on this index. Battery dataset credit: DOE/NREL/ALLIANCE/NAATBatt.</p>
@@ -218,6 +300,6 @@
     ></script>
     <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
     <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
-    <script src="app.js?v=20260428-2"></script>
+    <script src="app.js?v=20260430-1"></script>
 </body>
 </html>
