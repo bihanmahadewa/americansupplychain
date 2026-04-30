@@ -2988,9 +2988,10 @@ body.is-map-view .results-info span {
 }
 
 body.is-map-view #contributeBtn {
-    min-height: 30px;
-    padding: 6px 10px;
+    min-height: 38px;
+    padding: 9px 16px;
     border-radius: 7px;
+    font-size: 13px;
     white-space: nowrap;
 }
 

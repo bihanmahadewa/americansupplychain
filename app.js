@@ -2692,7 +2692,7 @@ async function submitContribution(event) {
             },
             body: JSON.stringify(payload)
         });
-        const result = await response.json();
+        const result = await parseContributionResponse(response);
 
         if (!response.ok) {
             throw new Error(result.error || 'Contribution failed.');
@@ -2709,6 +2709,23 @@ async function submitContribution(event) {
         setContributionStatus(error.message || 'Could not open a pull request.', 'is-error');
     } finally {
         contributeSubmit.disabled = false;
+    }
+}
+
+async function parseContributionResponse(response) {
+    const text = await response.text();
+    if (!text) {
+        return {};
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch (error) {
+        return {
+            error: response.ok
+                ? 'Contribution response was not valid JSON.'
+                : `Contribution endpoint returned ${response.status}. Redeploy with api/contribute.js if this is Vercel.`
+        };
     }
 }
 
