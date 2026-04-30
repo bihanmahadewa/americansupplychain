@@ -2698,9 +2698,7 @@ async function submitContribution(event) {
             throw new Error(result.error || 'Contribution failed.');
         }
 
-        setContributionStatus(result.pullRequestUrl
-            ? `Contribution submitted: ${result.pullRequestUrl}`
-            : 'Contribution submitted.', 'is-success');
+        setContributionStatus('Contribution added. If accepted, it will be live in 24 hours.', 'is-success');
         contributeForm.reset();
         if (result.pullRequestUrl) {
             window.open(result.pullRequestUrl, '_blank', 'noopener');
