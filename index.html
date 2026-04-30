@@ -85,7 +85,7 @@
                             <option value="">All States</option>
                         </select>
 
-                        <select id="industryFilter" aria-label="Filter by sector">
+                        <select id="industryFilter" class="taxonomy-filter" aria-label="Filter by category">
                             <option value="">All Sectors</option>
                         </select>
 
@@ -93,8 +93,17 @@
                     </div>
 
                     <div class="view-controls">
-                        <button id="treeViewBtn" class="view-btn" type="button">List</button>
                         <button id="graphViewBtn" class="view-btn active" type="button">Map</button>
+                        <button id="treeViewBtn" class="view-btn" type="button">List</button>
+                    </div>
+
+                    <div class="signals-rail" id="signalsRail" hidden>
+                        <div class="signals-rail-head">
+                            <span>Reshoring Signals</span>
+                        </div>
+                        <div class="signals-list">
+                            <p class="signals-empty">Loading signals...</p>
+                        </div>
                     </div>
 
                     <div class="results-info">

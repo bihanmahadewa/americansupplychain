@@ -2552,6 +2552,10 @@ body.is-list-view .graph-container {
     background: transparent;
 }
 
+body.is-list-view {
+    overflow: hidden;
+}
+
 body.is-list-view header,
 body.is-list-view .scroll-story {
     display: none !important;
@@ -2561,11 +2565,107 @@ body.is-list-view .page-shell,
 body.is-list-view main.container {
     width: 100%;
     max-width: none;
+    min-height: 100vh;
     margin: 0;
+    padding: 0;
+    background: #f3f5f8;
 }
 
 body.is-list-view .map-search-panel {
     position: fixed;
+    bottom: 18px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.signals-rail {
+    display: none;
+}
+
+body.is-list-view .signals-rail {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: 16px;
+    padding: 14px;
+    border: 1px solid #d8dee7;
+    border-radius: 8px;
+    background: #f1f4f7;
+    flex-direction: column;
+}
+
+.signals-rail-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.signals-rail-head span {
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.signals-rail-head small {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.signals-list {
+    display: grid;
+    gap: 8px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.signal-item {
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid #d7dee8;
+    border-radius: 8px;
+    background: #f1f4f7;
+    color: #111827;
+    text-decoration: none;
+}
+
+.signal-item:hover,
+.signal-item:focus {
+    border-color: #cbd5e1;
+    background: #eef2f6;
+    outline: none;
+}
+
+.signal-tag {
+    width: fit-content;
+    padding: 3px 6px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #334155;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.signal-item strong {
+    color: #111827;
+    font-size: 12px;
+    line-height: 1.25;
+}
+
+.signal-item span:last-child,
+.signals-empty {
+    color: #64748b;
+    font-size: 11px;
+    line-height: 1.35;
 }
 
 body.is-list-view .assistant-panel,
@@ -2582,7 +2682,112 @@ body.is-list-view .results-info {
 }
 
 body.is-list-view .directory-grid {
-    padding-top: 250px;
+    height: 100vh;
+    overflow: hidden;
+    padding: 18px 28px 18px 468px;
+}
+
+.list-table-view {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    height: 100%;
+    min-height: 0;
+}
+
+.list-table-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    border: 1px solid #dbe2ea;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.manufacturer-data-table {
+    width: 100%;
+    min-width: 0;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.manufacturer-data-table th,
+.manufacturer-data-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #edf1f5;
+    color: #1f2937;
+    font-size: 13px;
+    line-height: 1.35;
+    text-align: left;
+    vertical-align: top;
+}
+
+.manufacturer-data-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.manufacturer-data-table tr:hover td {
+    background: #f8fafc;
+}
+
+.manufacturer-data-table th:nth-child(1),
+.manufacturer-data-table td:nth-child(1) {
+    width: 44%;
+}
+
+.manufacturer-data-table th:nth-child(2),
+.manufacturer-data-table td:nth-child(2) {
+    width: 20%;
+}
+
+.manufacturer-data-table th:nth-child(3),
+.manufacturer-data-table td:nth-child(3) {
+    width: 18%;
+}
+
+.manufacturer-data-table th:nth-child(4),
+.manufacturer-data-table td:nth-child(4) {
+    width: 18%;
+}
+
+.manufacturer-data-table td strong,
+.manufacturer-data-table td span {
+    display: block;
+}
+
+.manufacturer-data-table td span {
+    margin-top: 3px;
+    color: #64748b;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.list-table-more {
+    position: absolute;
+    right: 44px;
+    bottom: 34px;
+    z-index: 4;
+    min-height: 30px;
+    padding: 8px 12px;
+    border: 1px solid #111827;
+    border-radius: 8px;
+    background: #111827;
+    color: #ffffff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
 }
 
 body.is-map-view .results-info {
@@ -2721,6 +2926,11 @@ body.is-map-view .map-legend {
         overflow: auto;
     }
 
+    body.is-list-view {
+        overflow: auto;
+        background: #f3f5f8;
+    }
+
     body.is-map-view .graph-container {
         min-height: 100vh;
     }
@@ -2733,9 +2943,42 @@ body.is-map-view .map-legend {
         padding: 10px;
     }
 
+    body.is-list-view .map-search-panel {
+        position: static;
+        width: auto;
+        margin: 10px;
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+    }
+
+    body.is-list-view .signals-rail {
+        display: none;
+    }
+
     body.is-map-view .filters,
     body.is-list-view .filters {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: stretch;
+    }
+
+    body.is-list-view .taxonomy-filter {
+        appearance: none;
+        -webkit-appearance: none;
+        min-height: 44px;
+        padding: 10px 38px 10px 12px;
+        border: 1px solid #d5dae3;
+        border-radius: 8px;
+        background:
+            linear-gradient(45deg, transparent 50%, #111827 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
+            linear-gradient(135deg, #111827 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
+            #ffffff;
+        color: #111827;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    body.is-list-view .filters button {
+        min-height: 44px;
+        border-radius: 8px;
     }
 
     body.is-map-view .view-controls,
@@ -2746,7 +2989,21 @@ body.is-map-view .map-legend {
     }
 
     body.is-list-view .directory-grid {
-        padding-top: 305px;
+        height: auto;
+        min-height: 100vh;
+        overflow: visible;
+        padding: 0 10px 56px;
+    }
+
+    .list-table-shell {
+        max-height: calc(100vh - 268px);
+        overflow: auto;
+    }
+
+    .list-table-more {
+        position: sticky;
+        bottom: 12px;
+        margin-top: 12px;
     }
 
     body.is-map-view .map-detail-panel {

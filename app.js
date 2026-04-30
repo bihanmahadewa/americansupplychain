@@ -31,6 +31,7 @@ const scrollStory = document.getElementById('scrollStory');
 const assistantMobileToggle = document.getElementById('assistantMobileToggle');
 const assistantMobileBackdrop = document.getElementById('assistantMobileBackdrop');
 const appLoadingOverlay = document.getElementById('appLoadingOverlay');
+const signalsRail = document.getElementById('signalsRail');
 
 const visibleIndustryAliases = {
     'Alloy Development': 'Alloy development',
@@ -627,6 +628,7 @@ let assistantPreviousResponseId = null;
 let assistantRequestInFlight = false;
 let hasStartedAssistantConversation = false;
 let currentFunFactIndex = -1;
+let listTableVisibleLimit = 1000;
 
 const MFG_INITIAL_PAGE_SIZE = 10000;
 const MFG_PAGE_SIZE = 10000;
@@ -635,6 +637,7 @@ const DETAIL_PIN_RENDER_LIMIT = 400000;
 const USE_WEBGL_PIN_LAYER = false;
 const CANVAS_PIN_HOVER_THROTTLE_MS = 32;
 const PIN_HIT_GRID_CELL_SIZE = 18;
+const LIST_TABLE_BATCH_SIZE = 1000;
 
 const manufacturingFunFacts = [
     'The Springfield Armory helped pioneer interchangeable parts manufacturing in the United States during the 19th century.',
@@ -928,20 +931,25 @@ const allUSStates = [
 document.addEventListener('DOMContentLoaded', async () => {
     setAppLoading(true);
     attachEventListeners();
-    switchView('graph');
+    switchView(getInitialView());
     moveStorySectionToBottom();
     normalizeManufacturerIndustries(manufacturers);
     await loadIqsCompanies();
     await loadMfgCompanies();
     filteredManufacturers = [...manufacturers];
     populateFilters();
-    switchView('graph');
+    switchView(getInitialView());
     startMfgMapPinLoad();
     initializeFunFacts();
     renderStoryPanels();
     initializeStoryObserver();
+    initializeReshoringSignals();
     setAppLoading(false);
 });
+
+function getInitialView() {
+    return isMobileViewport() ? 'tree' : 'graph';
+}
 
 function moveStorySectionToBottom() {
     if (!scrollStory) {
@@ -1035,6 +1043,8 @@ function startMfgMapPinLoad() {
             mfgMapPinsLoaded = true;
             if (currentView === 'graph') {
                 renderGraph(filteredManufacturers);
+            } else if (currentView === 'tree') {
+                renderManufacturers(filteredManufacturers);
             }
         });
 }
@@ -1063,6 +1073,8 @@ async function loadMfgMapPins() {
 
         if (currentView === 'graph') {
             renderGraph(filteredManufacturers);
+        } else if (currentView === 'tree') {
+            renderManufacturers(filteredManufacturers);
         }
 
         await new Promise(resolve => window.setTimeout(resolve, 0));
@@ -1368,15 +1380,86 @@ function populateFilters() {
         stateFilter.appendChild(option);
     });
 
-    getUniqueIndustries().filter(Boolean).forEach(industry => {
-        const option = document.createElement('option');
-        option.value = industry;
-        option.textContent = industry;
-        industryFilter.appendChild(option);
+    tierTaxonomy.flatMap(tier => tier.sections).forEach(section => {
+        const group = document.createElement('optgroup');
+        group.label = section.name;
+
+        const categoryOption = document.createElement('option');
+        categoryOption.value = createCategoryFilterValue(section.name);
+        categoryOption.textContent = `All ${section.name}`;
+        group.appendChild(categoryOption);
+
+        section.subcategories.forEach(subcategory => {
+            const option = document.createElement('option');
+            option.value = createSubcategoryFilterValue(section.name, subcategory.name);
+            option.textContent = subcategory.name;
+            group.appendChild(option);
+        });
+
+        industryFilter.appendChild(group);
     });
 }
 
+function createCategoryFilterValue(category) {
+    return `category:${category}`;
+}
+
+function createSubcategoryFilterValue(category, subcategory) {
+    return `subcategory:${category}||${subcategory}`;
+}
+
+function parseTaxonomyFilterValue(value) {
+    const raw = String(value || '');
+    if (!raw) {
+        return { type: 'all' };
+    }
+    if (raw.startsWith('category:')) {
+        return {
+            type: 'category',
+            category: raw.slice('category:'.length)
+        };
+    }
+    if (raw.startsWith('subcategory:')) {
+        const [category, subcategory] = raw.slice('subcategory:'.length).split('||');
+        return {
+            type: 'subcategory',
+            category: category || '',
+            subcategory: subcategory || ''
+        };
+    }
+
+    return {
+        type: 'industry',
+        industry: raw
+    };
+}
+
+function matchesTaxonomyFilter(manufacturer, filterValue, record = null) {
+    const filter = parseTaxonomyFilterValue(filterValue);
+    if (filter.type === 'all') {
+        return true;
+    }
+    if (filter.type === 'industry') {
+        return manufacturer.industry === filter.industry;
+    }
+
+    const assignment = manufacturerAssignments.get(manufacturer.id) || assignManufacturerToTaxonomy(manufacturer);
+    const category = record?.categoryLabel || getMapCategoryLabel(assignment, manufacturer);
+    const subcategory = record?.subcategoryLabel || getMapSubcategoryLabel(assignment);
+
+    if (filter.type === 'category') {
+        return category === filter.category;
+    }
+
+    return category === filter.category && subcategory === filter.subcategory;
+}
+
 function renderManufacturers(manufacturersToRender) {
+    if (currentView === 'tree') {
+        renderListTable();
+        return;
+    }
+
     const boardData = buildBoardData(manufacturersToRender);
     lastRenderedUnmappedManufacturers = boardData.unmappedManufacturers;
 
@@ -1524,6 +1607,147 @@ function renderUnmappedSectionMarkup(unmappedManufacturers) {
             <div class="section-content-area" id="section-content-uncategorized" style="display: none;"></div>
         </section>
     `;
+}
+
+function renderListTable() {
+    const rows = buildListTableRows();
+    const visibleRows = rows.slice(0, listTableVisibleLimit);
+    const canShowMore = rows.length > visibleRows.length;
+
+    directoryGrid.innerHTML = `
+        <section class="list-table-view" aria-label="Manufacturer table">
+            <div class="list-table-shell">
+                <table class="manufacturer-data-table">
+                    <thead>
+                        <tr>
+                            <th>Company</th>
+                            <th>Category</th>
+                            <th>Location</th>
+                            <th>Links</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${visibleRows.map(renderListTableRow).join('')}
+                    </tbody>
+                </table>
+            </div>
+            ${canShowMore ? `
+                <button type="button" class="list-table-more" aria-label="Show more rows">Show ${Math.min(LIST_TABLE_BATCH_SIZE, rows.length - visibleRows.length).toLocaleString()} more</button>
+            ` : ''}
+        </section>
+    `;
+
+    attachListTableEventListeners();
+    if (resultsCount) {
+        resultsCount.textContent = rows.length.toLocaleString();
+    }
+}
+
+function buildListTableRows() {
+    const selectedState = stateFilter?.value || '';
+    const selectedIndustry = industryFilter?.value || '';
+    const searchQuery = normalizeSearchText(mapSearchInput?.value || '');
+    const searchTokens = getSearchTokens(searchQuery);
+    const rowsById = new Map();
+
+    manufacturers.forEach((manufacturer) => {
+        if (!matchesListTableFilters(manufacturer, selectedState, selectedIndustry, searchTokens)) {
+            return;
+        }
+
+        rowsById.set(String(manufacturer.id), createListTableRowFromManufacturer(manufacturer));
+    });
+
+    mfgMapPinRecords.forEach((record) => {
+        const manufacturer = record.manufacturer;
+        if (!manufacturer || rowsById.has(String(manufacturer.id))) {
+            return;
+        }
+        if (!matchesListTableFilters(manufacturer, selectedState, selectedIndustry, searchTokens, record.searchText)) {
+            return;
+        }
+
+        rowsById.set(String(manufacturer.id), createListTableRowFromMfgRecord(record));
+    });
+
+    return Array.from(rowsById.values());
+}
+
+function matchesListTableFilters(manufacturer, selectedState, selectedIndustry, searchTokens, searchText = '') {
+    if (selectedState && manufacturer.location?.state !== selectedState) {
+        return false;
+    }
+    if (selectedIndustry && !matchesTaxonomyFilter(manufacturer, selectedIndustry)) {
+        return false;
+    }
+    if (!searchTokens.length) {
+        return true;
+    }
+
+    const searchable = searchText || getManufacturerSearchText(manufacturer);
+    return searchTokens.every(token => searchable.includes(token));
+}
+
+function createListTableRowFromManufacturer(manufacturer) {
+    const assignment = manufacturerAssignments.get(manufacturer.id) || assignManufacturerToTaxonomy(manufacturer);
+    return {
+        id: manufacturer.id,
+        name: manufacturer.name || 'Unnamed company',
+        sector: manufacturer.industry || 'Manufacturing',
+        category: getMapCategoryLabel(assignment, manufacturer),
+        subcategory: getMapSubcategoryLabel(assignment),
+        location: formatLocation(manufacturer.location),
+        source: manufacturer.source || 'Directory',
+        website: manufacturer.website || '',
+        description: manufacturer.description || ''
+    };
+}
+
+function createListTableRowFromMfgRecord(record) {
+    return {
+        id: record.id,
+        name: record.name || 'Unnamed company',
+        sector: record.industry || 'Manufacturing',
+        category: record.categoryLabel || 'Other',
+        subcategory: record.subcategoryLabel || 'Other',
+        location: record.location || formatLocation(record.manufacturer?.location),
+        source: 'MFG Companies',
+        website: '',
+        description: ''
+    };
+}
+
+function renderListTableRow(row) {
+    const linkMarkup = row.website
+        ? `<a href="${escapeAttribute(row.website)}" target="_blank" rel="noopener">${escapeHtml(formatWebsiteLabel(row.website))}</a>`
+        : '<span class="manufacturer-link-muted">n/a</span>';
+
+    return `
+        <tr>
+            <td>
+                <strong>${escapeHtml(row.name)}</strong>
+                ${row.description ? `<span>${escapeHtml(row.description)}</span>` : ''}
+            </td>
+            <td>
+                <strong>${escapeHtml(row.category || row.sector || 'Other')}</strong>
+                <span>${escapeHtml(row.subcategory || row.sector || 'Manufacturing')}</span>
+            </td>
+            <td>${escapeHtml(row.location || 'Location unavailable')}</td>
+            <td>${linkMarkup}</td>
+        </tr>
+    `;
+}
+
+function attachListTableEventListeners() {
+    const showMoreButton = directoryGrid.querySelector('.list-table-more');
+    if (!showMoreButton) {
+        return;
+    }
+
+    showMoreButton.addEventListener('click', () => {
+        listTableVisibleLimit += LIST_TABLE_BATCH_SIZE;
+        renderListTable();
+    });
 }
 
 function renderManufacturerMarkup(manufacturer) {
@@ -1922,29 +2146,26 @@ function filterManufacturers() {
 
     filteredManufacturers = manufacturers.filter(manufacturer => {
         const matchesState = selectedState === '' || manufacturer.location.state === selectedState;
-        const matchesIndustry = selectedIndustry === '' || manufacturer.industry === selectedIndustry;
+        const matchesIndustry = matchesTaxonomyFilter(manufacturer, selectedIndustry);
         const matchesSearch = matchesSearchQuery(manufacturer, searchQuery);
 
         return matchesState && matchesIndustry && matchesSearch;
     });
 
     if (currentView === 'tree') {
+        listTableVisibleLimit = LIST_TABLE_BATCH_SIZE;
         renderManufacturers(filteredManufacturers);
-
-        // Auto-expand first subcategory when industry filter is selected
-        if (selectedIndustry && selectedIndustry !== '') {
-            const firstSubcategory = directoryGrid.querySelector('.subcategory-card.has-data');
-            if (firstSubcategory) {
-                firstSubcategory.click();
-            }
-        }
     }
 
     if (currentView === 'graph') {
         renderGraph(filteredManufacturers);
     }
 
-    renderMapSearchResults();
+    if (currentView === 'graph') {
+        renderMapSearchResults();
+    } else {
+        clearMapSearchResults();
+    }
 }
 
 function clearFilters() {
@@ -2125,6 +2346,89 @@ function clearMapSearchResults() {
         mapSearchResults.hidden = true;
         mapSearchResults.innerHTML = '';
     }
+}
+
+async function initializeReshoringSignals() {
+    if (!signalsRail) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/signals', { cache: 'no-store' });
+        if (!response.ok) {
+            throw new Error(`Signals request failed: ${response.status}`);
+        }
+        const payload = await response.json();
+        renderReshoringSignals(Array.isArray(payload.signals) ? payload.signals : []);
+    } catch (error) {
+        console.warn('Unable to load reshoring signals.', error);
+        renderReshoringSignals(getFallbackSignals());
+    }
+}
+
+function renderReshoringSignals(signals) {
+    if (!signalsRail) {
+        return;
+    }
+
+    const list = signalsRail.querySelector('.signals-list');
+    if (!list) {
+        return;
+    }
+
+    signalsRail.hidden = false;
+
+    if (!signals.length) {
+        list.innerHTML = '<p class="signals-empty">No fresh signals yet.</p>';
+        return;
+    }
+
+    list.innerHTML = signals.slice(0, 8).map(signal => `
+        <a class="signal-item" href="${escapeAttribute(signal.url || '#')}" target="_blank" rel="noopener">
+            <span class="signal-tag">${escapeHtml(signal.tag || 'Signal')}</span>
+            <strong>${escapeHtml(signal.title || 'Untitled signal')}</strong>
+            <span>${escapeHtml([signal.source, formatSignalDate(signal.date)].filter(Boolean).join(' | '))}</span>
+        </a>
+    `).join('');
+}
+
+function formatSignalDate(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    return date.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
+function getFallbackSignals() {
+    return [
+        {
+            title: 'CBP forced labor enforcement actions',
+            source: 'CBP',
+            tag: 'Import enforcement',
+            url: 'https://www.cbp.gov/trade/forced-labor'
+        },
+        {
+            title: 'Federal Register trade and duty notices',
+            source: 'Federal Register',
+            tag: 'Duty / rulemaking',
+            url: 'https://www.federalregister.gov/'
+        },
+        {
+            title: 'Manufacturing.gov federal announcements',
+            source: 'Manufacturing.gov',
+            tag: 'Reshoring',
+            url: 'https://www.manufacturing.gov/federal-announcements'
+        }
+    ];
 }
 
 async function sendChatMessage() {
@@ -2371,6 +2675,7 @@ function switchView(view) {
     document.body.classList.toggle('is-list-view', view === 'tree');
 
     if (view === 'tree') {
+        listTableVisibleLimit = LIST_TABLE_BATCH_SIZE;
         treeViewBtn.classList.add('active');
         graphViewBtn.classList.remove('active');
         renderManufacturers(filteredManufacturers);
@@ -2762,7 +3067,7 @@ function buildFilteredMfgMapPins() {
         if (selectedState && record.state !== selectedState) {
             return;
         }
-        if (selectedIndustry && record.industry !== selectedIndustry) {
+        if (selectedIndustry && !matchesTaxonomyFilter(record.manufacturer, selectedIndustry, record)) {
             return;
         }
         if (searchTokens.length && !searchTokens.every(token => record.searchText.includes(token))) {
