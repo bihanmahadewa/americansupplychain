@@ -6041,6 +6041,29 @@ const manufacturers = [
         description: "InventWood makes SUPERWOOD, a densified wood material with up to 10x the strength-to-weight ratio of steel. SUPERWOOD is fire-, moisture-, and termite-resistant, and it sequesters carbon. Can replace steel and aluminum across construction, defense, and transportation, strengthening domestic manufacturing and supply-chain resilience.",
         employees: "10-50"
     },
+    {
+            "id": 30995,
+            "name": "apple",
+            "twitter": "",
+            "twitterUrl": "",
+            "website": "https://apple.com/",
+            "email": "test@gmaik.com",
+            "phone": "",
+            "location": {
+                    "city": "SF",
+                    "state": "California",
+                    "zip": "94133"
+            },
+            "industry": "3D Printing",
+            "products": [
+                    "3d"
+            ],
+            "description": "HI",
+            "founded": null,
+            "employees": "",
+            "source": "Community submission",
+            "sourceUrl": "https://apple.com/"
+    },
     // Add your X.com manufacturer profiles here following this format
 ];
 
