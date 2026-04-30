@@ -3002,11 +3002,11 @@ body.is-map-view #contributeBtn {
 
 body.is-map-view .map-detail-panel {
     position: absolute;
-    top: 202px;
+    top: 260px;
     left: 18px;
     z-index: 690;
     width: min(420px, calc(100vw - 36px));
-    max-height: calc(100vh - 226px);
+    max-height: calc(100vh - 284px);
     overflow: auto;
     padding: 18px;
     border: 1px solid rgba(17, 24, 39, 0.12);
