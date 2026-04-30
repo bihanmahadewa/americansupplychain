@@ -638,6 +638,7 @@ const USE_WEBGL_PIN_LAYER = false;
 const CANVAS_PIN_HOVER_THROTTLE_MS = 32;
 const PIN_HIT_GRID_CELL_SIZE = 18;
 const LIST_TABLE_BATCH_SIZE = 1000;
+const LARGE_PIN_COUNT_THRESHOLD = 20000;
 
 const manufacturingFunFacts = [
     'The Springfield Armory helped pioneer interchangeable parts manufacturing in the United States during the 19th century.',
@@ -3376,7 +3377,10 @@ function drawPinsWithWebgl(state, canvas) {
         uploadPinWebglData(state);
     }
 
-    const pointSize = usMap.getZoom() >= 7 ? 3.4 : usMap.getZoom() >= 5.5 ? 2.6 : 1.75;
+    const useLargePins = currentMapPins.length < LARGE_PIN_COUNT_THRESHOLD;
+    const pointSize = useLargePins
+        ? (usMap.getZoom() >= 7 ? 4.2 : usMap.getZoom() >= 5.5 ? 3.2 : 2.35)
+        : (usMap.getZoom() >= 7 ? 3.4 : usMap.getZoom() >= 5.5 ? 2.6 : 1.75);
     const pixelOrigin = usMap.getPixelOrigin();
 
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -3467,16 +3471,22 @@ function drawPinsWithCanvas2d(canvas) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const zoom = usMap.getZoom();
-    const activeSize = zoom >= 7 ? 3 : zoom >= 5.5 ? 2.2 : 1.45;
-    const mutedSize = Math.max(1.4, activeSize * 0.65);
+    const useLargePins = currentMapPins.length < LARGE_PIN_COUNT_THRESHOLD;
+    const activeSize = useLargePins
+        ? (zoom >= 7 ? 4.2 : zoom >= 5.5 ? 3.2 : 2.35)
+        : (zoom >= 7 ? 3 : zoom >= 5.5 ? 2.2 : 1.45);
+    const mutedSize = useLargePins
+        ? Math.max(1.6, activeSize * 0.62)
+        : Math.max(1.4, activeSize * 0.65);
     resetPinHitGrid();
 
     const drawPin = (pin, point, isHighlighted) => {
         const size = isHighlighted ? activeSize : mutedSize;
-        const halfSize = size / 2;
         ctx.globalAlpha = isHighlighted ? 0.92 : 0.06;
         ctx.fillStyle = isHighlighted ? pin.markerColor : '#64748b';
-        ctx.fillRect(point.x - halfSize, point.y - halfSize, size, size);
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
+        ctx.fill();
         if (isHighlighted) {
             addPinToHitGrid(pin, point.x, point.y);
         }
@@ -4177,7 +4187,7 @@ async function renderStaticSvgMap(pins, renderToken) {
 
         const radius = pin.isCategoryAggregate
             ? Math.min(11, Math.max(3, Math.log10((pin.count || 1) + 1) * 2.1))
-            : 2.8;
+            : 3.4;
         const name = pin.manufacturer.name || '';
         const details = pin.isCategoryAggregate
             ? `${pin.location || ''} · ${pin.count || 0} companies`
