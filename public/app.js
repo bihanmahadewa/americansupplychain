@@ -4669,6 +4669,16 @@ function generateMapLegend(manufacturersToGraph, mapPins = []) {
                 ${renderMapLegendCategory(category, color, subcategoryCounts.get(category))}
             `).join('')}
         </div>
+        <div class="legend-footer">
+            <div class="legend-follow-x" aria-label="Follow the project maintainers on X">
+                <svg class="legend-x-logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817-5.966 6.817H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"></path>
+                </svg>
+                <a href="https://x.com/bihanmahadewa" target="_blank" rel="noopener">@bihanmahadewa</a>
+                <span class="legend-follow-separator">/</span>
+                <a href="https://x.com/vincentmcasey" target="_blank" rel="noopener">@vincentmcasey</a>
+            </div>
+        </div>
     `;
 
     mapLegend.querySelectorAll('[data-category]').forEach(element => {
