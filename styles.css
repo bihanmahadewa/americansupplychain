@@ -1221,6 +1221,12 @@ span.manufacturer-name {
     color: #ffffff;
 }
 
+.contribute-submit {
+    min-height: 38px;
+    padding: 8px 14px;
+    font-size: 14px;
+}
+
 .contribute-submit:disabled {
     opacity: 0.62;
     cursor: wait;
@@ -2988,10 +2994,9 @@ body.is-map-view .results-info span {
 }
 
 body.is-map-view #contributeBtn {
-    min-height: 38px;
-    padding: 9px 16px;
+    min-height: 30px;
+    padding: 6px 10px;
     border-radius: 7px;
-    font-size: 13px;
     white-space: nowrap;
 }
 
