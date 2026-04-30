@@ -10,6 +10,13 @@ const mapSearchResults = document.getElementById('mapSearchResults');
 const mapDetailPanel = document.getElementById('mapDetailPanel');
 const resultsCount = document.getElementById('resultsCount');
 const suggestBtn = document.getElementById('suggestBtn');
+const contributeBtn = document.getElementById('contributeBtn');
+const contributeModal = document.getElementById('contributeModal');
+const contributeForm = document.getElementById('contributeForm');
+const contributeSubmit = document.getElementById('contributeSubmit');
+const contributeStatus = document.getElementById('contributeStatus');
+const contributeState = document.getElementById('contributeState');
+const contributeIndustry = document.getElementById('contributeIndustry');
 const treeViewBtn = document.getElementById('treeViewBtn');
 const graphViewBtn = document.getElementById('graphViewBtn');
 const mapModeCategoriesBtn = document.getElementById('mapModeCategoriesBtn');
@@ -643,6 +650,7 @@ const USE_WEBGL_PIN_LAYER = false;
 const CANVAS_PIN_HOVER_THROTTLE_MS = 32;
 const PIN_HIT_GRID_CELL_SIZE = 18;
 const LIST_TABLE_BATCH_SIZE = 1000;
+const LARGE_PIN_COUNT_THRESHOLD = 20000;
 
 const manufacturingFunFacts = [
     'The Springfield Armory helped pioneer interchangeable parts manufacturing in the United States during the 19th century.',
@@ -943,6 +951,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadMfgCompanies();
     filteredManufacturers = [...manufacturers];
     populateFilters();
+    populateContributionOptions();
     switchView(getInitialView());
     startMfgMapPinLoad();
     initializeFunFacts();
@@ -2567,6 +2576,7 @@ function attachEventListeners() {
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             closeMobileAssistantPanel();
+            closeContributionModal();
         }
     });
 
@@ -2603,9 +2613,112 @@ function attachEventListeners() {
         });
     }
 
-    suggestBtn.addEventListener('click', () => {
+    if (suggestBtn) {
+        suggestBtn.addEventListener('click', openContributionModal);
+    }
+    if (contributeBtn) {
+        contributeBtn.addEventListener('click', openContributionModal);
+    }
+    if (contributeModal) {
+        contributeModal.querySelectorAll('[data-contribute-close]').forEach((element) => {
+            element.addEventListener('click', closeContributionModal);
+        });
+    }
+    if (contributeForm) {
+        contributeForm.addEventListener('submit', submitContribution);
+    }
+}
+
+function populateContributionOptions() {
+    if (contributeState && contributeState.options.length <= 1) {
+        allUSStates.forEach((state) => {
+            const option = document.createElement('option');
+            option.value = state;
+            option.textContent = state;
+            contributeState.appendChild(option);
+        });
+    }
+
+    if (contributeIndustry && contributeIndustry.options.length <= 1) {
+        getUniqueIndustries().forEach((industry) => {
+            const option = document.createElement('option');
+            option.value = industry;
+            option.textContent = industry;
+            contributeIndustry.appendChild(option);
+        });
+    }
+}
+
+function openContributionModal() {
+    if (!contributeModal) {
         window.open('https://github.com/bihanmahadewa/americansupplychain', '_blank');
-    });
+        return;
+    }
+
+    contributeModal.hidden = false;
+    document.body.classList.add('has-contribute-modal');
+    setContributionStatus('');
+
+    const firstInput = contributeModal.querySelector('input[name="name"]');
+    if (firstInput) {
+        window.setTimeout(() => firstInput.focus(), 0);
+    }
+}
+
+function closeContributionModal() {
+    if (!contributeModal || contributeModal.hidden) {
+        return;
+    }
+
+    contributeModal.hidden = true;
+    document.body.classList.remove('has-contribute-modal');
+}
+
+async function submitContribution(event) {
+    event.preventDefault();
+    if (!contributeForm || !contributeSubmit) {
+        return;
+    }
+
+    const payload = Object.fromEntries(new FormData(contributeForm).entries());
+    setContributionStatus('Submitting contribution...', 'is-pending');
+    contributeSubmit.disabled = true;
+
+    try {
+        const response = await fetch('/api/contribute', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Contribution failed.');
+        }
+
+        setContributionStatus(result.pullRequestUrl
+            ? `Contribution submitted: ${result.pullRequestUrl}`
+            : 'Contribution submitted.', 'is-success');
+        contributeForm.reset();
+        if (result.pullRequestUrl) {
+            window.open(result.pullRequestUrl, '_blank', 'noopener');
+        }
+    } catch (error) {
+        setContributionStatus(error.message || 'Could not open a pull request.', 'is-error');
+    } finally {
+        contributeSubmit.disabled = false;
+    }
+}
+
+function setContributionStatus(message, className = '') {
+    if (!contributeStatus) {
+        return;
+    }
+
+    contributeStatus.textContent = message;
+    contributeStatus.className = `contribute-status ${className}`.trim();
 }
 
 function isMobileViewport() {
@@ -3381,7 +3494,10 @@ function drawPinsWithWebgl(state, canvas) {
         uploadPinWebglData(state);
     }
 
-    const pointSize = usMap.getZoom() >= 7 ? 3.4 : usMap.getZoom() >= 5.5 ? 2.6 : 1.75;
+    const useLargePins = currentMapPins.length < LARGE_PIN_COUNT_THRESHOLD;
+    const pointSize = useLargePins
+        ? (usMap.getZoom() >= 7 ? 4.2 : usMap.getZoom() >= 5.5 ? 3.2 : 2.35)
+        : (usMap.getZoom() >= 7 ? 3.4 : usMap.getZoom() >= 5.5 ? 2.6 : 1.75);
     const pixelOrigin = usMap.getPixelOrigin();
 
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -3472,16 +3588,22 @@ function drawPinsWithCanvas2d(canvas) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const zoom = usMap.getZoom();
-    const activeSize = zoom >= 7 ? 3 : zoom >= 5.5 ? 2.2 : 1.45;
-    const mutedSize = Math.max(1.4, activeSize * 0.65);
+    const useLargePins = currentMapPins.length < LARGE_PIN_COUNT_THRESHOLD;
+    const activeSize = useLargePins
+        ? (zoom >= 7 ? 4.2 : zoom >= 5.5 ? 3.2 : 2.35)
+        : (zoom >= 7 ? 3 : zoom >= 5.5 ? 2.2 : 1.45);
+    const mutedSize = useLargePins
+        ? Math.max(1.6, activeSize * 0.62)
+        : Math.max(1.4, activeSize * 0.65);
     resetPinHitGrid();
 
     const drawPin = (pin, point, isHighlighted) => {
         const size = isHighlighted ? activeSize : mutedSize;
-        const halfSize = size / 2;
         ctx.globalAlpha = isHighlighted ? 0.92 : 0.06;
         ctx.fillStyle = isHighlighted ? pin.markerColor : '#64748b';
-        ctx.fillRect(point.x - halfSize, point.y - halfSize, size, size);
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
+        ctx.fill();
         if (isHighlighted) {
             addPinToHitGrid(pin, point.x, point.y);
         }
@@ -4182,7 +4304,7 @@ async function renderStaticSvgMap(pins, renderToken) {
 
         const radius = pin.isCategoryAggregate
             ? Math.min(11, Math.max(3, Math.log10((pin.count || 1) + 1) * 2.1))
-            : 2.8;
+            : 3.4;
         const name = pin.manufacturer.name || '';
         const details = pin.isCategoryAggregate
             ? `${pin.location || ''} · ${pin.count || 0} companies`
