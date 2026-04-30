@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>American Supply Chain</title>
+    <meta name="description" content="Open-source American supply chain directory mapping U.S. manufacturers by category, location, and industrial capability.">
+    <meta name="keywords" content="American supply chain, U.S. manufacturing, industrial directory, reshoring, manufacturers map, open source">
+    <meta name="author" content="Bihan Mahadewa">
+    <meta name="robots" content="index, follow">
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="American Supply Chain">
+    <meta property="og:description" content="Open-source index of U.S. manufacturers, capabilities, and sourcing gaps across the industrial stack.">
+    <meta property="og:url" content="https://americansupplychain.vercel.app">
+    <meta property="og:site_name" content="American Supply Chain">
+    <meta property="og:image" content="https://americansupplychain.vercel.app/assets/flag.png">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="American Supply Chain">
+    <meta name="twitter:description" content="Open-source index of U.S. manufacturers, capabilities, and sourcing gaps across the industrial stack.">
+    <meta name="twitter:image" content="https://americansupplychain.vercel.app/assets/flag.png">
+    <meta name="twitter:site" content="@bihanmahadewa">
+    <link rel="icon" type="image/png" href="/assets/flag.png">
+    <link rel="stylesheet" href="styles.css">
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""
+    >
+    <script>
+        !function(t,e){var o,n,p,r;e.__SV||(window.posthog&&window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="Ir init Br Zr Ci jr $r Lr capture calculateEventProperties Yr register register_once register_for_session unregister unregister_for_session Jr getFeatureFlag getFeatureFlagPayload getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey displaySurvey cancelPendingSurvey canRenderSurvey canRenderSurveyAsync Kr identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset setIdentity clearIdentity get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException captureLog startExceptionAutocapture stopExceptionAutocapture loadToolbar get_property getSessionProperty Wr zr createPersonProfile setInternalOrTestUser Xr Or en opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing get_explicit_consent_status is_capturing clear_opt_in_out_capturing Vr debug ki Gr getPageViewId captureTraceFeedback captureTraceMetric Nr".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+        posthog.init('phc_mcynEyUWB0ZGFREtyq2lMPGHbPnSUUbRurwW1Yan7Ad', {
+            api_host: 'https://us.i.posthog.com',
+            defaults: '2026-01-30',
+            person_profiles: 'identified_only',
+        });
+    </script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-JHW57HJJW7"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+        gtag('config', 'G-JHW57HJJW7');
+    </script>
+    <script type="module">
+        import { inject } from '/@vercel/analytics';
+        inject();
+    </script>
+</head>
+<body>
+    <div class="app-loading-overlay" id="appLoadingOverlay" aria-live="polite">
+        <div class="app-loading-inner">
+            <span class="app-loading-flag-wrap" aria-hidden="true">
+                <img src="/assets/flag.png" alt="" class="app-loading-flag">
+            </span>
+        </div>
+    </div>
+    <div class="page-shell">
+        <header>
+            <div class="container">
+                <div class="header-logo">
+                    <span class="header-flag-wrap" aria-hidden="true">
+                        <img src="/assets/flag.png" alt="American flag" class="flag-icon">
+                    </span>
+                    <h1>American Supply Chain</h1>
+                </div>
+            </div>
+        </header>
+
+        <main class="container">
+            <section class="graph-container" id="graphContainer">
+                <section class="search-section map-search-panel" aria-label="Search and filter manufacturers">
+                    <div class="map-search-box">
+                        <img src="/assets/flag.png" alt="" class="map-search-logo" aria-hidden="true">
+                        <h2 class="map-search-title">American Supply Chain</h2>
+                        <label class="search-label" for="mapSearchInput">Search manufacturers</label>
+                        <input
+                            id="mapSearchInput"
+                            type="search"
+                            autocomplete="off"
+                            placeholder="Search company, capability, product, city..."
+                        >
+                    </div>
+
+                    <div class="filters">
+                        <select id="stateFilter" aria-label="Filter by state" hidden>
+                            <option value="">All States</option>
+                        </select>
+
+                        <select id="industryFilter" class="taxonomy-filter" aria-label="Filter by category">
+                            <option value="">All Sectors</option>
+                        </select>
+
+                        <button id="clearFilters" type="button">Clear</button>
+                    </div>
+
+                    <div class="view-controls">
+                        <button id="graphViewBtn" class="view-btn active" type="button">Map</button>
+                        <button id="treeViewBtn" class="view-btn" type="button">List</button>
+                    </div>
+
+                    <div class="signals-rail" id="signalsRail" hidden>
+                        <div class="signals-rail-head">
+                            <span>Reshoring Signals</span>
+                        </div>
+                        <div class="signals-list">
+                            <p class="signals-empty">Loading signals...</p>
+                        </div>
+                    </div>
+
+                    <div class="results-info">
+                        <span id="resultsCount">0 manufacturers indexed</span>
+                        <button id="contributeBtn" type="button">Contribute</button>
+                    </div>
+
+                    <div class="map-search-results" id="mapSearchResults" hidden></div>
+                </section>
+                <div id="networkGraph" aria-label="Map of U.S. manufacturers"></div>
+                <aside class="map-detail-panel" id="mapDetailPanel" hidden aria-live="polite"></aside>
+                <div class="map-legend" id="mapLegend"></div>
+            </section>
+
+            <section class="scroll-story" id="scrollStory">
+                <div class="story-column">
+                    <article class="story-step active" data-highlight="">
+                        <p class="story-step-kicker">Now trending</p>
+                        <h3>Hottest Startups</h3>
+                        <p>High-signal U.S. industrial startups from this dataset.</p>
+                        <ol class="story-list" id="hottestStartupsList"></ol>
+                    </article>
+
+                    <article class="story-step" data-highlight="">
+                        <p class="story-step-kicker">Who to follow</p>
+                        <h3>Reindustrialize Builders on X</h3>
+                        <p>People consistently shipping ideas, factories, and policy narratives.</p>
+                        <ol class="story-list" id="peopleToFollowList"></ol>
+                    </article>
+                </div>
+            </section>
+
+            <section class="directory-grid" id="directoryGrid" style="display: none;">
+                <!-- Category directory will be inserted here -->
+            </section>
+
+            <section class="add-manufacturer">
+                <p>Know a company that belongs in one of the missing categories? This project is open source.</p>
+                <button id="suggestBtn" type="button">Contribute</button>
+            </section>
+
+            <div class="contribute-modal" id="contributeModal" hidden>
+                <div class="contribute-backdrop" data-contribute-close></div>
+                <section class="contribute-dialog" role="dialog" aria-modal="true" aria-labelledby="contributeTitle">
+                    <div class="contribute-header">
+                        <div>
+                            <p class="contribute-kicker">Community submission</p>
+                            <h2 id="contributeTitle">Add a business</h2>
+                        </div>
+                        <button class="contribute-close" type="button" aria-label="Close contribution form" data-contribute-close>&times;</button>
+                    </div>
+
+                    <form class="contribute-form" id="contributeForm">
+                        <div class="contribute-grid">
+                            <label>
+                                <span>Business name</span>
+                                <input name="name" autocomplete="organization" required>
+                            </label>
+                            <label>
+                                <span>Website</span>
+                                <input name="website" type="url" autocomplete="url" placeholder="https://example.com" required>
+                            </label>
+                            <label>
+                                <span>Industry</span>
+                                <select name="industry" id="contributeIndustry" required>
+                                    <option value="">Select industry</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span>Products or capabilities</span>
+                                <input name="products" placeholder="CNC machining, metal fabrication" required>
+                            </label>
+                            <label>
+                                <span>City</span>
+                                <input name="city" autocomplete="address-level2" required>
+                            </label>
+                            <label>
+                                <span>State</span>
+                                <select name="state" id="contributeState" autocomplete="address-level1" required>
+                                    <option value="">Select state</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span>Business email</span>
+                                <input name="email" type="email" autocomplete="email">
+                            </label>
+                            <label>
+                                <span>Phone</span>
+                                <input name="phone" autocomplete="tel">
+                            </label>
+                            <label>
+                                <span>X handle or URL</span>
+                                <input name="twitter" placeholder="@company">
+                            </label>
+                            <label>
+                                <span>Founded</span>
+                                <input name="founded" inputmode="numeric" placeholder="1999">
+                            </label>
+                            <label>
+                                <span>Employees</span>
+                                <input name="employees" placeholder="50-100">
+                            </label>
+                        </div>
+
+                        <label>
+                            <span>Description</span>
+                            <textarea name="description" rows="4" maxlength="500" placeholder="Short factual summary of what the company makes in the U.S." required></textarea>
+                        </label>
+
+                        <p class="contribute-status" id="contributeStatus" role="status" aria-live="polite"></p>
+
+                        <div class="contribute-actions">
+                            <button class="contribute-submit" id="contributeSubmit" type="submit">Contribute</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+
+            <section class="data-attribution">
+                <p>The directory includes public company website references and a filtered import of public-facing U.S. battery supply-chain entries from the NAATBatt database, limited to categories already supported on this index. Battery dataset credit: DOE/NREL/ALLIANCE/NAATBatt.</p>
+            </section>
+
+            <!-- <section class="poster-section">
+            <a href="https://reindustrialize.com" target="_blank" rel="noopener">
+                <img src="/assets/reindustrialize.png" alt="Reindustrialize Summit" class="poster-image-large">
+            </a>
+        </section> -->
+        </main>
+
+        <footer>
+            <div class="container">
+                <p>
+                    American Supply Chain 2026 by
+                    <a href="https://x.com/bihanmahadewa" target="_blank" rel="noopener">Bihan Mahadewa</a>
+                </p>
+            </div>
+        </footer>
+    </div>
+
+    <button
+        class="assistant-mobile-toggle"
+        id="assistantMobileToggle"
+        type="button"
+        aria-controls="assistantPanel"
+        aria-expanded="false"
+        aria-label="Open chat panel"
+    >
+        Chat
+    </button>
+    <div class="assistant-mobile-backdrop" id="assistantMobileBackdrop" hidden></div>
+
+    <aside class="assistant-panel" id="assistantPanel">
+        <div class="assistant-panel-body is-landing" id="assistantPanelBody">
+            <div class="assistant-messages" id="chatMessages">
+            </div>
+            <div class="fun-fact-card" id="funFactCard" hidden>
+                <p class="fun-fact-kicker">American manufacturing heritage</p>
+                <p class="fun-fact-text" id="funFactText"></p>
+            </div>
+            <div class="assistant-results" id="assistantResults"></div>
+        </div>
+
+        <div class="assistant-bottom-tools">
+            <div class="assistant-quick-links" id="assistantQuickLinks">
+                <button class="assistant-quick-link is-primary" id="funFactTrigger" type="button">Show a fun fact</button>
+                <button class="assistant-quick-link" type="button" data-prompt="I need help finding U.S. manufacturers for a hardware product.">Find manufacturers</button>
+                <button class="assistant-quick-link" type="button" data-prompt="What supply chain gaps or bottlenecks stand out in this directory?">Show sourcing gaps</button>
+                <button class="assistant-quick-link" type="button" data-prompt="Which categories should a hardware founder look at first when sourcing in America?">Explore categories</button>
+                <button class="assistant-quick-link" type="button" data-prompt="Help me source CNC machining, injection molding, or electronics assembly in the U.S.">Popular capabilities</button>
+                <button class="assistant-quick-link" type="button" data-prompt="What are 10 notable manufacturing startups or emerging industrial companies in the U.S.?">Top 10 manufacturing startups</button>
+            </div>
+        </div>
+
+        <div class="assistant-input">
+            <textarea id="chatInput" placeholder="Describe what you're looking for." rows="4"></textarea>
+            <div class="assistant-actions">
+                <p class="assistant-hint">Press Enter to chat.</p>
+                <button id="chatSend">Chat</button>
+            </div>
+        </div>
+    </aside>
+
+    <script src="/data/data.js?v=20260417-2"></script>
+    <script src="/data/naatbatt-imports.js?v=20260418-1"></script>
+    <script src="/data/iqs-companies.js?v=20260418-2"></script>
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""
+    ></script>
+    <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
+    <script src="app.js?v=20260430-1"></script>
+</body>
+</html>

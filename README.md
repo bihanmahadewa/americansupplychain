@@ -1,90 +1,130 @@
-# OS Dataset Contributor Guide
+# American Supply Chain
 
-This repository contains the **OS (open-source) manufacturing dataset** used by the American Supply Chain directory.
+Open-source index of U.S. manufacturers, industrial suppliers, battery supply-chain companies, and sourcing signals. The app is a static-first web UI with a small Node/Vercel-compatible API layer for search assistance, contribution PRs, reshoring signals, and paged manufacturer data.
 
-## What Contributors Should Know
-- The app currently reads records from `data.js`.
-- Supporting JSON files (for imports or experiments) exist in the repo, but `data.js` is the source currently loaded by the server.
-- Each entry should represent a real U.S.-based manufacturer or industrial supplier.
+## What Is Included
 
-## Record Shape
-Use this structure for each company entry:
+- Interactive U.S. manufacturer map and searchable list view.
+- Core curated manufacturer dataset in `public/data/data.js`.
+- Public NAATBatt battery supply-chain import in `public/data/naatbatt-imports.js`.
+- IQS-derived motion-control and industrial supplier import in `public/data/iqs-companies.js`.
+- Large MFG directory runtime data in `public/data/mfg-companies-lite.json` plus detail chunks under `public/data/mfg-company-details/`.
+- Enrichment overrides in `public/data/mfg-enrichment-overrides.json`.
+- Local cached manufacturing facts in `data/fun-facts-cache.json`.
+- API routes for chat, contributions, fun facts, reshoring signals, MFG paging, map pins, and detail lookup.
 
-```js
-{
-  id: 12345,
-  name: "Company Name",
-  twitter: "@handle",
-  twitterUrl: "https://x.com/handle",
-  website: "https://example.com",
-  email: "info@example.com",
-  phone: "555-555-5555",
-  location: {
-    city: "City",
-    state: "State",
-    zip: "12345"
-  },
-  industry: "Industry label",
-  products: ["Product A", "Product B"],
-  description: "Short factual summary.",
-  founded: 1999,
-  employees: "50-100",
-  source: "Source name",
-  sourceCategory: "Optional source grouping"
-}
+Current dataset scale:
+
+- `public/data/data.js`: about 282 curated records.
+- `public/data/naatbatt-imports.js`: about 435 battery supply-chain records.
+- `public/data/iqs-companies.js`: about 894 industrial supplier records.
+- `public/data/mfg-companies-lite.json`: 321,298 lightweight manufacturer rows.
+- `public/data/mfg-company-details/`: 321,298 detailed manufacturer records split into chunks.
+
+## Project Layout
+
+```txt
+api/                 Vercel API route wrappers
+data/                Server-only cached data
+public/              Browser-served app files
+public/assets/       Images and static assets
+public/data/         Browser/API runtime datasets
+server.js            Local server and shared API handler
 ```
 
-## Data Standards
-- Keep entries factual and concise.
-- Use official company websites or reputable directories as sources.
-- Avoid placeholders like `example.com` in production entries.
-- Prefer full U.S. state names (for consistency with existing records).
-- Keep `products` specific and useful for matching.
-- Do not include sensitive personal data.
+## Runtime Files
 
-## ID Rules
-- IDs must be unique.
-- When adding records, use IDs higher than the current max.
-- Do not renumber existing entries.
+These files are needed for the index to run:
 
-## Contribution Workflow
-1. Add or edit records in `data.js`.
-2. Validate syntax (no trailing structural errors, valid JS object formatting).
-3. Start the app:
-   - `npm install`
-   - `npm start`
-4. Spot-check the UI/API behavior for regressions.
-5. Submit a PR with a clear summary:
-   - What was added/changed
-   - Source(s) used
-   - Any assumptions or normalization decisions
+- `public/index.html`, `public/styles.css`, `public/app.js`
+- `server.js`, `api/*.js`
+- `public/data/data.js`, `public/data/naatbatt-imports.js`, `public/data/iqs-companies.js`
+- `public/data/mfg-companies-lite.json`, `public/data/mfg-company-details/*.json`, `public/data/mfg-enrichment-overrides.json`
+- `data/fun-facts-cache.json`
+- `public/assets/flag.png`, `public/assets/reindustrialize.png`
+- `package.json`, `package-lock.json`
 
-## Website Contribution Form
-The in-app **Contribute** button can open a pull request automatically when the server has GitHub credentials.
+Raw spreadsheets, one-off import scratch files, old demo HTML, and unused assets are intentionally not kept in this branch.
 
-Set these environment variables on the server:
+## Run Locally
 
 ```sh
-GITHUB_TOKEN=github_pat_or_app_token
+npm install
+npm start
+```
+
+The server defaults to:
+
+```txt
+http://127.0.0.1:3000
+```
+
+The UI also uses browser-loaded CDN assets for Leaflet, D3, TopoJSON, analytics, and the U.S. map topology.
+
+## Optional Environment
+
+Most of the index works without secrets. These variables unlock optional server features:
+
+```sh
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-4.1
+VECTOR_STORE_ID=...
+GITHUB_TOKEN=...
 GITHUB_REPO=bihanmahadewa/americansupplychain
 GITHUB_BASE_BRANCH=main
 ```
 
-The token needs permission to create branches, write `data.js`, and open pull requests. Without `GITHUB_TOKEN`, the form still opens but submission returns a setup message instead of exposing credentials in the browser.
+- `OPENAI_API_KEY` and `VECTOR_STORE_ID` power `/api/chat`.
+- `GITHUB_TOKEN` powers `/api/contribute`, which opens a pull request that edits `public/data/data.js`.
+- Without those values, the map, list, search, static data, MFG paging, details, cached fun facts, and fallback reshoring signals still run.
 
-## Quality Checklist
-- [ ] Entry is a real company and relevant to U.S. supply chain/manufacturing.
-- [ ] `name`, `industry`, `location`, `products`, and `description` are present.
-- [ ] `website` is valid and reachable.
-- [ ] `id` is unique.
-- [ ] No duplicate company already exists under another spelling.
-- [ ] No sensitive or unverifiable claims.
+## Data Contributions
 
-## Notes for Large Imports
-For large batch imports (for example from spreadsheets or directories):
-- Normalize state, phone, and product naming before merge.
-- De-duplicate against `name + website + location`.
-- Keep raw source files in clearly named files/folders for traceability.
+Add curated records to `public/data/data.js`. Each company should be a real U.S.-based manufacturer or industrial supplier with factual public-source information.
 
-## Questions
-If any schema or sourcing rule is unclear, open an issue/PR note with a short proposed convention so we can keep the dataset consistent.
+Record shape:
+
+```js
+{
+    id: 12345,
+    name: "Company Name",
+    twitter: "@handle",
+    twitterUrl: "https://x.com/handle",
+    website: "https://example.com",
+    email: "info@example.com",
+    phone: "555-555-5555",
+    location: {
+        city: "City",
+        state: "State",
+        zip: "12345"
+    },
+    industry: "Industry label",
+    products: ["Product A", "Product B"],
+    description: "Short factual summary.",
+    founded: 1999,
+    employees: "50-100",
+    source: "Source name",
+    sourceUrl: "https://source.example"
+}
+```
+
+Contribution checks:
+
+- Use unique IDs higher than the current max.
+- Do not renumber existing records.
+- Prefer official company sites or reputable directories.
+- Keep descriptions short, factual, and verifiable.
+- Check for duplicate companies before adding new records.
+- Do not include sensitive personal data.
+
+## API Routes
+
+- `GET /api/mfg-lite?offset=0&limit=1000`
+- `GET /api/mfg-map-pins?offset=0&limit=25000`
+- `GET /api/company-details?id=123`
+- `GET /api/signals`
+- `POST /api/chat`
+- `POST /api/fun-fact`
+- `POST /api/contribute`
+
+The `api/*.js` files are thin wrappers around `server.js` so the same handlers work locally and on Vercel.
