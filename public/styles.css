@@ -2366,6 +2366,14 @@ header,
     flex-wrap: wrap;
 }
 
+.desktop-use-note {
+    margin: -8px 0 14px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
 .view-btn,
 .filters button,
 #suggestBtn,
@@ -2960,6 +2968,7 @@ body.is-list-view .directory-grid {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
+    -webkit-overflow-scrolling: touch;
     border: 1px solid #dbe2ea;
     border-radius: 8px;
     background: #ffffff;
@@ -2967,8 +2976,8 @@ body.is-list-view .directory-grid {
 }
 
 .manufacturer-data-table {
-    width: 100%;
-    min-width: 0;
+    width: max(100%, 820px);
+    min-width: 820px;
     border-collapse: collapse;
     table-layout: fixed;
 }
@@ -2982,6 +2991,7 @@ body.is-list-view .directory-grid {
     line-height: 1.35;
     text-align: left;
     vertical-align: top;
+    overflow: hidden;
 }
 
 .manufacturer-data-table th {
@@ -3032,6 +3042,14 @@ body.is-list-view .directory-grid {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+}
+
+.manufacturer-data-table td a {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .list-table-more {
@@ -3263,6 +3281,11 @@ body.is-map-view .map-legend {
         padding-bottom: 2px;
     }
 
+    .desktop-use-note {
+        margin: -2px 0 10px;
+        font-size: 12px;
+    }
+
     body.is-list-view .directory-grid {
         height: auto;
         min-height: 100vh;
@@ -3272,7 +3295,8 @@ body.is-map-view .map-legend {
 
     .list-table-shell {
         max-height: calc(100vh - 268px);
-        overflow: auto;
+        overflow-x: auto;
+        overflow-y: auto;
     }
 
     .list-table-more {
