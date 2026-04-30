@@ -176,6 +176,11 @@ const tierTaxonomy = [
                         name: 'Cathode / anode materials',
                         industryMatches: ['Cathode Materials', 'Anode Materials', 'Battery Materials'],
                         keywordMatches: ['cathode', 'anode', 'lfp', 'graphite anode', 'silicon anode', 'cathode active materials']
+                    },
+                    {
+                        name: 'Densified wood / engineered biomaterials',
+                        industryMatches: ['Densified Wood Materials', 'Engineered Wood', 'Biomaterials'],
+                        keywordMatches: ['densified wood', 'superwood', 'engineered wood', 'mass timber', 'structural biomaterial']
                     }
                 ]
             },

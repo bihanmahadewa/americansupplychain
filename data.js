@@ -6018,6 +6018,29 @@ const manufacturers = [
         founded: 2025,
         employees: "1-10"
     },
+    {
+        id: 30994,
+        name: "InventWood",
+        twitter: "",
+        twitterUrl: "",
+        website: "https://www.inventwood.com",
+        email: "",
+        phone: "",
+        location: {
+            city: "Frederick",
+            state: "Maryland",
+            zip: "21703"
+        },
+        industry: "Densified Wood Materials",
+        products: [
+            "SUPERWOOD",
+            "Premium cladding",
+            "Decking",
+            "Structural components (mullions, louvers, beams, columns, trusses)"
+        ],
+        description: "InventWood makes SUPERWOOD, a densified wood material with up to 10x the strength-to-weight ratio of steel. SUPERWOOD is fire-, moisture-, and termite-resistant, and it sequesters carbon. Can replace steel and aluminum across construction, defense, and transportation, strengthening domestic manufacturing and supply-chain resilience.",
+        employees: "10-50"
+    },
     // Add your X.com manufacturer profiles here following this format
 ];
 
