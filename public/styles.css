@@ -2367,6 +2367,7 @@ header,
 }
 
 .desktop-use-note {
+    display: none;
     margin: -8px 0 14px;
     color: #64748b;
     font-size: 12px;
@@ -3282,6 +3283,7 @@ body.is-map-view .map-legend {
     }
 
     .desktop-use-note {
+        display: block;
         margin: -2px 0 10px;
         font-size: 12px;
     }
