@@ -1389,11 +1389,6 @@ function populateFilters() {
         const group = document.createElement('optgroup');
         group.label = section.name;
 
-        const categoryOption = document.createElement('option');
-        categoryOption.value = createCategoryFilterValue(section.name);
-        categoryOption.textContent = `All ${section.name}`;
-        group.appendChild(categoryOption);
-
         section.subcategories.forEach(subcategory => {
             const option = document.createElement('option');
             option.value = createSubcategoryFilterValue(section.name, subcategory.name);
