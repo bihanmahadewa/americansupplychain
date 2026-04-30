@@ -6,7 +6,7 @@ const manufacturers = [
         name: "American Steel Works",
         twitter: "@AmericanSteel",
         twitterUrl: "https://x.com/AmericanSteel",
-        website: "https://americansteel.example.com",
+        website: "https://americansteel.com",
         email: "info@americansteel.com",
         phone: "(412) 555-0100",
         location: {
@@ -29,7 +29,7 @@ const manufacturers = [
         name: "Liberty Textiles",
         twitter: "@LibertyTextiles",
         twitterUrl: "https://x.com/LibertyTextiles",
-        website: "https://libertytextiles.example.com",
+        website: "https://libertytextiles.com",
         email: "sales@libertytextiles.com",
         phone: "(704) 555-0200",
         location: {
@@ -53,7 +53,7 @@ const manufacturers = [
         name: "Midwest Machine Tools",
         twitter: "@MidwestTools",
         twitterUrl: "https://x.com/MidwestTools",
-        website: "https://midwesttools.example.com",
+        website: "https://midwesttools.com",
         email: "contact@midwesttools.com",
         phone: "(414) 555-0300",
         location: {
@@ -77,7 +77,7 @@ const manufacturers = [
         name: "Pacific Electronics Manufacturing",
         twitter: "@PacificElec",
         twitterUrl: "https://x.com/PacificElec",
-        website: "https://pacificelec.example.com",
+        website: "https://pacificelec.com",
         email: "info@pacificelec.com",
         phone: "(408) 555-0400",
         location: {
@@ -101,7 +101,7 @@ const manufacturers = [
         name: "Heritage Furniture Co.",
         twitter: "@HeritageFurn",
         twitterUrl: "https://x.com/HeritageFurn",
-        website: "https://heritagefurniture.example.com",
+        website: "https://heritagefurniture.com",
         email: "sales@heritagefurniture.com",
         phone: "(828) 555-0500",
         location: {

@@ -48,10 +48,9 @@
 <body>
     <div class="app-loading-overlay" id="appLoadingOverlay" aria-live="polite">
         <div class="app-loading-inner">
-            <div class="app-loading-flag-wrap" aria-hidden="true">
-                <img src="flag.png" alt="American flag" class="app-loading-flag">
-            </div>
-            <p>Loading American Supply Chain...</p>
+            <span class="app-loading-flag-wrap" aria-hidden="true">
+                <img src="flag.png" alt="" class="app-loading-flag">
+            </span>
         </div>
     </div>
     <div class="page-shell">
@@ -67,38 +66,54 @@
         </header>
 
         <main class="container">
-            <section class="search-section">
-                <div class="story-intro">
-                    <p class="story-kicker">Interactive Atlas</p>
-                    <h2>Tracking American Industrial Capacity</h2>
-                    <p class="story-lede">Scroll, filter, and explore where U.S. manufacturers are concentrated across the national supply chain.</p>
-                </div>
-                <div class="filters">
-                    <select id="stateFilter">
-                        <option value="">All States</option>
-                    </select>
-
-                    <select id="industryFilter">
-                        <option value="">All Sectors</option>
-                    </select>
-
-                    <button id="clearFilters">Clear</button>
-                </div>
-
-                <div class="view-controls">
-                    <button id="treeViewBtn" class="view-btn active">List</button>
-                    <button id="graphViewBtn" class="view-btn">Map</button>
-                    <button id="mapModeCategoriesBtn" class="view-btn active" type="button">Categories</button>
-                    <button id="mapModeCompaniesBtn" class="view-btn" type="button">Companies</button>
-                </div>
-
-                <div class="results-info">
-                    <span id="resultsCount">0 manufacturers indexed</span>
-                </div>
-            </section>
-
             <section class="graph-container" id="graphContainer">
+                <section class="search-section map-search-panel" aria-label="Search and filter manufacturers">
+                    <div class="map-search-box">
+                        <img src="flag.png" alt="" class="map-search-logo" aria-hidden="true">
+                        <h2 class="map-search-title">American Supply Chain</h2>
+                        <label class="search-label" for="mapSearchInput">Search manufacturers</label>
+                        <input
+                            id="mapSearchInput"
+                            type="search"
+                            autocomplete="off"
+                            placeholder="Search company, capability, product, city..."
+                        >
+                    </div>
+
+                    <div class="filters">
+                        <select id="stateFilter" aria-label="Filter by state" hidden>
+                            <option value="">All States</option>
+                        </select>
+
+                        <select id="industryFilter" class="taxonomy-filter" aria-label="Filter by category">
+                            <option value="">All Sectors</option>
+                        </select>
+
+                        <button id="clearFilters" type="button">Clear</button>
+                    </div>
+
+                    <div class="view-controls">
+                        <button id="graphViewBtn" class="view-btn active" type="button">Map</button>
+                        <button id="treeViewBtn" class="view-btn" type="button">List</button>
+                    </div>
+
+                    <div class="signals-rail" id="signalsRail" hidden>
+                        <div class="signals-rail-head">
+                            <span>Reshoring Signals</span>
+                        </div>
+                        <div class="signals-list">
+                            <p class="signals-empty">Loading signals...</p>
+                        </div>
+                    </div>
+
+                    <div class="results-info">
+                        <span id="resultsCount">0 manufacturers indexed</span>
+                    </div>
+
+                    <div class="map-search-results" id="mapSearchResults" hidden></div>
+                </section>
                 <div id="networkGraph" aria-label="Map of U.S. manufacturers"></div>
+                <aside class="map-detail-panel" id="mapDetailPanel" hidden aria-live="polite"></aside>
                 <div class="map-legend" id="mapLegend"></div>
             </section>
 
@@ -185,7 +200,7 @@
         </div>
 
         <div class="assistant-input">
-            <textarea id="chatInput" placeholder="Ask for manufacturers or describe what you're looking for." rows="4"></textarea>
+            <textarea id="chatInput" placeholder="Describe what you're looking for." rows="4"></textarea>
             <div class="assistant-actions">
                 <p class="assistant-hint">Press Enter to chat.</p>
                 <button id="chatSend">Chat</button>
@@ -203,6 +218,6 @@
     ></script>
     <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
     <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
-    <script src="app.js?v=20260426-4"></script>
+    <script src="app.js?v=20260428-2"></script>
 </body>
 </html>

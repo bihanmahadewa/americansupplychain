@@ -19,6 +19,43 @@ const DEFAULT_FUN_FACTS = [
     'American machine tool makers enabled precision production across aerospace, auto, and defense.',
     'Containerization and logistics innovation helped U.S. manufacturers ship faster and cheaper worldwide.'
 ];
+const SIGNALS_CACHE_TTL_MS = 45 * 60 * 1000;
+const SIGNAL_KEYWORDS = [
+    'reshor',
+    'buy america',
+    'made in america',
+    'manufacturing',
+    'supply chain',
+    'critical mineral',
+    'semiconductor',
+    'antidumping',
+    'countervailing',
+    'import restriction',
+    'tariff',
+    'section 232',
+    'section 301',
+    'forced labor'
+];
+const SIGNAL_FALLBACKS = [
+    {
+        title: 'CBP forced labor enforcement actions',
+        source: 'CBP',
+        tag: 'Import enforcement',
+        url: 'https://www.cbp.gov/trade/forced-labor'
+    },
+    {
+        title: 'Federal Register trade and duty notices',
+        source: 'Federal Register',
+        tag: 'Duty / rulemaking',
+        url: 'https://www.federalregister.gov/'
+    },
+    {
+        title: 'Manufacturing.gov federal announcements',
+        source: 'Manufacturing.gov',
+        tag: 'Reshoring',
+        url: 'https://www.manufacturing.gov/federal-announcements'
+    }
+];
 
 const MIME_TYPES = {
     '.css': 'text/css; charset=utf-8',
@@ -39,6 +76,10 @@ let funFactsCache = loadFunFactsCache();
 let funFactCursor = 0;
 let mfgCompanyDetailsById = null;
 let mfgLiteRows = null;
+let signalsCache = {
+    fetchedAt: 0,
+    signals: SIGNAL_FALLBACKS
+};
 
 const requestHandler = async (req, res) => {
     try {
@@ -57,12 +98,20 @@ const requestHandler = async (req, res) => {
             await handleFunFactRequest(req, res);
             return;
         }
+        if (req.method === 'GET' && pathname === '/api/signals') {
+            await handleSignalsRequest(req, res);
+            return;
+        }
         if (req.method === 'GET' && pathname === '/api/company-details') {
             await handleCompanyDetailsRequest(req, res);
             return;
         }
         if (req.method === 'GET' && pathname === '/api/mfg-lite') {
             await handleMfgLiteRequest(req, res);
+            return;
+        }
+        if (req.method === 'GET' && pathname === '/api/mfg-map-pins') {
+            await handleMfgMapPinsRequest(req, res);
             return;
         }
 
@@ -280,6 +329,28 @@ async function handleFunFactRequest(req, res) {
     });
 }
 
+async function handleSignalsRequest(req, res) {
+    const now = Date.now();
+    if (now - signalsCache.fetchedAt < SIGNALS_CACHE_TTL_MS && signalsCache.signals.length) {
+        sendJson(res, 200, {
+            signals: signalsCache.signals,
+            cached: true
+        });
+        return;
+    }
+
+    const signals = await fetchReshoringSignals();
+    signalsCache = {
+        fetchedAt: Date.now(),
+        signals: signals.length ? signals : SIGNAL_FALLBACKS
+    };
+
+    sendJson(res, 200, {
+        signals: signalsCache.signals,
+        cached: false
+    });
+}
+
 async function handleCompanyDetailsRequest(req, res) {
     const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const id = Number(requestUrl.searchParams.get('id') || 0);
@@ -305,7 +376,7 @@ async function handleCompanyDetailsRequest(req, res) {
 async function handleMfgLiteRequest(req, res) {
     const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const offset = Math.max(0, Number(requestUrl.searchParams.get('offset') || 0));
-    const limit = Math.min(5000, Math.max(1, Number(requestUrl.searchParams.get('limit') || 1000)));
+    const limit = Math.min(25000, Math.max(1, Number(requestUrl.searchParams.get('limit') || 1000)));
 
     if (!mfgLiteRows) {
         mfgLiteRows = loadMfgLiteRows();
@@ -313,6 +384,22 @@ async function handleMfgLiteRequest(req, res) {
 
     const total = mfgLiteRows.length;
     const rows = mfgLiteRows.slice(offset, offset + limit);
+    sendJson(res, 200, { rows, total, offset, limit });
+}
+
+async function handleMfgMapPinsRequest(req, res) {
+    const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const offset = Math.max(0, Number(requestUrl.searchParams.get('offset') || 0));
+    const limit = Math.min(50000, Math.max(1, Number(requestUrl.searchParams.get('limit') || 25000)));
+
+    if (!mfgLiteRows) {
+        mfgLiteRows = loadMfgLiteRows();
+    }
+
+    const total = mfgLiteRows.length;
+    const rows = mfgLiteRows
+        .slice(offset, offset + limit)
+        .map(row => [row?.[0], row?.[1] || '', row?.[2] || 'Manufacturing', row?.[3] || '', row?.[4] || '']);
     sendJson(res, 200, { rows, total, offset, limit });
 }
 
@@ -692,6 +779,250 @@ function shouldForceRecommendMode(message) {
     ];
 
     return strategySignals.some(signal => text.includes(signal));
+}
+
+async function fetchReshoringSignals() {
+    const sourceResults = await Promise.allSettled([
+        fetchFederalRegisterSignals(),
+        fetchManufacturingGovSignals(),
+        fetchCbpForcedLaborSignals()
+    ]);
+
+    const signals = sourceResults
+        .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+        .filter(Boolean);
+
+    return dedupeSignals(signals)
+        .sort((a, b) => getSignalTime(b) - getSignalTime(a))
+        .slice(0, 12);
+}
+
+async function fetchFederalRegisterSignals() {
+    const terms = [
+        'antidumping countervailing duty',
+        'import restrictions',
+        'Section 232 manufacturing',
+        'Buy America manufacturing',
+        'critical minerals supply chain'
+    ];
+    const requests = terms.map(async (term) => {
+        const url = new URL('https://www.federalregister.gov/api/v1/documents.json');
+        url.searchParams.set('per_page', '4');
+        url.searchParams.set('order', 'newest');
+        url.searchParams.set('conditions[term]', term);
+        const payload = await fetchJsonWithTimeout(url.toString(), 7000);
+        return Array.isArray(payload.results)
+            ? payload.results
+                .map(item => {
+                    const text = [item.title, item.abstract].filter(Boolean).join(' ');
+                    if (!isSignalRelevant(text)) {
+                        return null;
+                    }
+                    return {
+                        title: item.title || item.abstract || 'Federal Register notice',
+                        source: 'Federal Register',
+                        tag: tagSignal(text),
+                        url: item.html_url || item.pdf_url || item.public_inspection_pdf_url || 'https://www.federalregister.gov/',
+                        date: item.publication_date || item.signing_date || ''
+                    };
+                })
+                .filter(Boolean)
+            : [];
+    });
+
+    const results = await Promise.allSettled(requests);
+    return results.flatMap(result => result.status === 'fulfilled' ? result.value : []);
+}
+
+async function fetchManufacturingGovSignals() {
+    const html = await fetchTextWithTimeout('https://www.manufacturing.gov/federal-announcements', 7000);
+    const section = html
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '');
+    const headingMatches = Array.from(section.matchAll(/<h3[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h3>/gi));
+    const plainHeadingMatches = headingMatches.length
+        ? headingMatches
+        : Array.from(section.matchAll(/<h3[^>]*>([\s\S]*?)<\/h3>/gi)).map(match => ['', '', match[1]]);
+
+    return plainHeadingMatches
+        .slice(0, 8)
+        .map((match) => {
+            const href = match[1] || '/federal-announcements';
+            const title = cleanMarkup(match[2] || '');
+            if (!title || !isSignalRelevant(title)) {
+                return null;
+            }
+            return {
+                title,
+                source: 'Manufacturing.gov',
+                tag: tagSignal(title),
+                url: absolutizeUrl(href, 'https://www.manufacturing.gov'),
+                date: extractNearbyDate(section, title)
+            };
+        })
+        .filter(Boolean);
+}
+
+async function fetchCbpForcedLaborSignals() {
+    const html = (await fetchTextWithTimeout('https://www.cbp.gov/trade/forced-labor', 7000))
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '');
+    const recent = html.split(/Recent Enforcement Actions/i)[1] || '';
+    const matches = Array.from(recent.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi));
+    return matches
+        .slice(0, 10)
+        .map(match => {
+            const text = cleanMarkup(match[1]);
+            if (!isCleanSignalTitle(text) || !isSignalRelevant(text)) {
+                return null;
+            }
+            const hrefMatch = match[1].match(/href="([^"]+)"/i);
+            return {
+                title: text.replace(/-Press Release Date\s*/i, ' - '),
+                source: 'CBP',
+                tag: 'Import enforcement',
+                url: absolutizeUrl(hrefMatch?.[1] || '/trade/forced-labor', 'https://www.cbp.gov'),
+                date: extractDateFromText(text)
+            };
+        })
+        .filter(Boolean);
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs) {
+    const response = await fetchWithTimeout(url, timeoutMs, {
+        headers: { 'Accept': 'application/json' }
+    });
+    if (!response.ok) {
+        throw new Error(`Fetch failed: ${response.status} ${url}`);
+    }
+    return response.json();
+}
+
+async function fetchTextWithTimeout(url, timeoutMs) {
+    const response = await fetchWithTimeout(url, timeoutMs, {
+        headers: { 'Accept': 'text/html,application/rss+xml,application/xml;q=0.9,*/*;q=0.8' }
+    });
+    if (!response.ok) {
+        throw new Error(`Fetch failed: ${response.status} ${url}`);
+    }
+    return response.text();
+}
+
+async function fetchWithTimeout(url, timeoutMs, options = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+function dedupeSignals(signals) {
+    const seen = new Set();
+    return signals.filter(signal => {
+        const key = normalizeSignalKey(signal.url || signal.title);
+        if (!key || seen.has(key)) {
+            return false;
+        }
+        seen.add(key);
+        return true;
+    });
+}
+
+function normalizeSignalKey(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/^https?:\/\/(www\.)?/, '')
+        .replace(/[?#].*$/, '')
+        .replace(/\W+/g, ' ')
+        .trim();
+}
+
+function isSignalRelevant(value) {
+    const text = String(value || '').toLowerCase();
+    return SIGNAL_KEYWORDS.some(keyword => text.includes(keyword));
+}
+
+function isCleanSignalTitle(value) {
+    const text = String(value || '').trim();
+    if (!text || text.length > 220) {
+        return false;
+    }
+    if (/[{}]|Skip to main content|Official websites use|Enter Search Term/i.test(text)) {
+        return false;
+    }
+    return true;
+}
+
+function tagSignal(value) {
+    const text = String(value || '').toLowerCase();
+    if (text.includes('forced labor') || text.includes('withhold release') || text.includes('uflpa')) {
+        return 'Import enforcement';
+    }
+    if (text.includes('antidumping') || text.includes('countervailing') || text.includes('tariff') || text.includes('section 232') || text.includes('section 301')) {
+        return 'Duty / tariff';
+    }
+    if (text.includes('grant') || text.includes('funding') || text.includes('loan') || text.includes('award')) {
+        return 'Funding';
+    }
+    if (text.includes('buy america') || text.includes('made in america') || text.includes('reshor')) {
+        return 'Reshoring';
+    }
+    if (text.includes('critical mineral') || text.includes('semiconductor') || text.includes('supply chain')) {
+        return 'Supply chain';
+    }
+    return 'Signal';
+}
+
+function cleanMarkup(value) {
+    return decodeHtmlEntities(String(value || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim());
+}
+
+function decodeHtmlEntities(value) {
+    return String(value || '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&nbsp;/g, ' ');
+}
+
+function absolutizeUrl(value, baseUrl) {
+    try {
+        return new URL(value || '/', baseUrl).toString();
+    } catch (error) {
+        return baseUrl;
+    }
+}
+
+function extractNearbyDate(html, title) {
+    const index = html.indexOf(title);
+    if (index < 0) {
+        return '';
+    }
+    return extractDateFromText(cleanMarkup(html.slice(index, index + 500)));
+}
+
+function extractDateFromText(value) {
+    const match = String(value || '').match(/\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2},?\s+\d{4}\b|\b\d{1,2}\/\d{1,2}\/\d{4}\b/i);
+    if (!match) {
+        return '';
+    }
+    const date = new Date(match[0]);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+}
+
+function getSignalTime(signal) {
+    const date = new Date(signal.date || 0);
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
 function readJsonBody(req) {
