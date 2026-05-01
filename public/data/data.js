@@ -6041,6 +6041,32 @@ const manufacturers = [
         description: "InventWood makes SUPERWOOD, a densified wood material with up to 10x the strength-to-weight ratio of steel. SUPERWOOD is fire-, moisture-, and termite-resistant, and it sequesters carbon. Can replace steel and aluminum across construction, defense, and transportation, strengthening domestic manufacturing and supply-chain resilience.",
         employees: "10-50"
     },
+    {
+            "id": 30995,
+            "name": "Inter-Precision Mold Inc.",
+            "twitter": "",
+            "twitterUrl": "",
+            "website": "https://inter915.com/",
+            "email": "ipm@inter915.com",
+            "phone": "9155953433",
+            "location": {
+                    "city": "El Paso",
+                    "state": "Texas",
+                    "zip": ""
+            },
+            "industry": "Tool and Die Manufacturing",
+            "products": [
+                    "Tool and Die Makers",
+                    "CNC Machining",
+                    "Injection Mold Fabrication and Repair",
+                    "Precision Components"
+            ],
+            "description": "We specialize in Mold Fabrication and Repair, as well as contract production manufacturing.",
+            "founded": 1997,
+            "employees": "10",
+            "source": "Community submission",
+            "sourceUrl": "https://inter915.com/"
+    },
     // Add your X.com manufacturer profiles here following this format
 ];
 
