@@ -6041,6 +6041,29 @@ const manufacturers = [
         description: "InventWood makes SUPERWOOD, a densified wood material with up to 10x the strength-to-weight ratio of steel. SUPERWOOD is fire-, moisture-, and termite-resistant, and it sequesters carbon. Can replace steel and aluminum across construction, defense, and transportation, strengthening domestic manufacturing and supply-chain resilience.",
         employees: "10-50"
     },
+    {
+            "id": 30995,
+            "name": "Supply Energetics",
+            "twitter": "",
+            "twitterUrl": "https://x.com/S_Energetics",
+            "website": "https://www.supplyenergetics.com/",
+            "email": "info@supplyenergetics.com",
+            "phone": "620-349-0376",
+            "location": {
+                    "city": "Parsons",
+                    "state": "Kansas",
+                    "zip": ""
+            },
+            "industry": "Manufacturing",
+            "products": [
+                    "Nitrocellulose & Energetic Materials"
+            ],
+            "description": "Supply Energetics is a U.S. manufacturing and technology company focused on nitrocellulose.",
+            "founded": 2024,
+            "employees": "10-50",
+            "source": "Community submission",
+            "sourceUrl": "https://www.supplyenergetics.com/"
+    },
     // Add your X.com manufacturer profiles here following this format
 ];
 
