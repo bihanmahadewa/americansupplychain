@@ -6041,6 +6041,29 @@ const manufacturers = [
         description: "InventWood makes SUPERWOOD, a densified wood material with up to 10x the strength-to-weight ratio of steel. SUPERWOOD is fire-, moisture-, and termite-resistant, and it sequesters carbon. Can replace steel and aluminum across construction, defense, and transportation, strengthening domestic manufacturing and supply-chain resilience.",
         employees: "10-50"
     },
+    {
+            "id": 30995,
+            "name": "Diversified Plastics Industries",
+            "twitter": "",
+            "twitterUrl": "https://divplastics.com/",
+            "website": "https://divplastics.com/",
+            "email": "businessoffice@divplastics.com",
+            "phone": "918-245-0770",
+            "location": {
+                    "city": "Sand Springs",
+                    "state": "Oklahoma",
+                    "zip": ""
+            },
+            "industry": "Manufacturing",
+            "products": [
+                    "Vacuum Molding Plastic"
+            ],
+            "description": "We vacuum mold. Big or small. American plastic molded by Americans.",
+            "founded": 1985,
+            "employees": "10",
+            "source": "Community submission",
+            "sourceUrl": "https://divplastics.com/"
+    },
     // Add your X.com manufacturer profiles here following this format
 ];
 
