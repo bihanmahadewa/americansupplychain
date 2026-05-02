@@ -1,0 +1,4 @@
+@import "@arcgis/core/assets/esri/themes/dark/main.css";
+@import "tailwindcss";
+@plugin "daisyui/index.js";
+@plugin "@tailwindcss/typography";

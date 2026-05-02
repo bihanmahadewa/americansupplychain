@@ -1,8 +1,0 @@
-node_modules/
-.env
-.DS_Store
-results/
-*.log
-manufacturers-found.json
-mfg-companies-import.json
-.aider*

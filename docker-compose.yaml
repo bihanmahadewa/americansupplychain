@@ -1,0 +1,21 @@
+services:
+  asc-app-service:
+    build:
+      context: ./app
+      dockerfile: Dockerfiles/Dockerfile.local
+    command: [ "yarn", "run", "dev" ]
+    volumes:
+      - ./app:/usr/src/app
+      - /usr/src/app/node_modules
+    ports:
+      - 5173:5173
+  asc-server-service:
+    build:
+      context: ./server
+      dockerfile: Dockerfiles/Dockerfile.local
+    command: [ "yarn", "run", "docker" ]
+    volumes:
+      - ./server:/usr/src/server
+      - /usr/src/server/node_modules
+    ports:
+      - 3000:3000
