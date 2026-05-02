@@ -4,6 +4,10 @@
 
 This is a full-stack application in TypeScript for visualizing the American supply chain.
 
+<p align="center">
+  <img src="docs/asc.png" alt="American Supply Chain">
+</p>
+
 ## Getting Started
 
 This application runs in Docker.
