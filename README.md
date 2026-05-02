@@ -12,7 +12,7 @@ This is a full-stack application in TypeScript for visualizing the American supp
 
 This application runs in Docker.
 
-In the root directory, run `docker compose build`, then `docker-compose up`.
+In the root directory, run `docker compose build`, then `docker compose up`.
 
 ## Services
 
