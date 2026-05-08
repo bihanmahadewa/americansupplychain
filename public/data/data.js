@@ -6041,6 +6041,32 @@ const manufacturers = [
         description: "InventWood makes SUPERWOOD, a densified wood material with up to 10x the strength-to-weight ratio of steel. SUPERWOOD is fire-, moisture-, and termite-resistant, and it sequesters carbon. Can replace steel and aluminum across construction, defense, and transportation, strengthening domestic manufacturing and supply-chain resilience.",
         employees: "10-50"
     },
+    {
+            "id": 30995,
+            "name": "Pennex Aluminum LLC",
+            "twitter": "",
+            "twitterUrl": "",
+            "website": "https://www.pennex.com/",
+            "email": "sewing@pennex.com",
+            "phone": "15172406445",
+            "location": {
+                    "city": "Leetonia",
+                    "state": "Ohio",
+                    "zip": ""
+            },
+            "industry": "Manufacturing",
+            "products": [
+                    "Aluminum extrusion",
+                    "Cutting",
+                    "CNC machining",
+                    "assembly"
+            ],
+            "description": "Pennex is a vertically integrated aluminum extruder with facilities in both eastern Ohio and eastern Pennsylvania. Pennex has two remelt facilities, four extrusion presses, multiple CNC work centers, and the ability to assemble components into a finished product. Pennex supplies a variety of industries, including automotive, building and construction, solar, truck/trailer and electrical.",
+            "founded": 1974,
+            "employees": "650",
+            "source": "Community submission",
+            "sourceUrl": "https://www.pennex.com/"
+    },
     // Add your X.com manufacturer profiles here following this format
 ];
 
